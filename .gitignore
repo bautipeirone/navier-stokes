@@ -2,4 +2,5 @@ demo
 headless
 .depend
 *.o
-__pycache__/*
+**/__pycache__/*
+.vscode

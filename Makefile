@@ -1,7 +1,9 @@
-CC=gcc
-CFLAGS=-std=c11 -Wall -Wextra -Wno-unused-parameter -O3 -funroll-loops -march=native -mfpmath=sse -ffast-math
-CFLAGS+=-Ofast
-LDFLAGS=
+# Los parametros de compilacion a tunear estan en un
+# archivo separado
+include build_config.mk
+
+# Agrego el archivo como dependencia de compilacion
+.EXTRA_PREREQS := build_config.mk
 
 SOURCE_DIR=src
 TARGETS=demo headless
@@ -17,9 +19,9 @@ headless: $(SOURCE_DIR)/headless.o $(COMMON_OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -f $(TARGETS) *.o .depend *~
+	rm -f $(TARGETS) $(SOURCE_DIR)/*.o .depend *~
 
-.depend: *.[ch]
+.depend: $(SOURCE_DIR)/*.[ch]
 	$(CC) -MM $(SOURCES) >.depend
 
 -include .depend
