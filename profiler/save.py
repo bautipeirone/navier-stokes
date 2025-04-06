@@ -1,7 +1,18 @@
 import os
 import pandas as pd
 
-TRACKED_STATS = ["SIZE", "CC", "CFLAGS", "LDFLAGS", "FLOPS", "IPS", "EXE_SIZE"]
+TRACKED_STATS = [
+  "SIZE",
+  "CC",
+  "CFLAGS",
+  "LDFLAGS",
+  "FLOPS",
+  "IPS",
+  "EXE_SIZE",
+  "HOST",
+  "OS_RELEASE",
+  "GLIBC_VER"
+]
 
 def find_prev_line_break(f):
   pos = f.tell()
@@ -25,7 +36,8 @@ def get_last_index(file):
 
 
 def save_benchmark(file, data):
-  header = False if os.path.exists(file) else TRACKED_STATS
+  file_is_empty = not os.path.exists(file) or os.path.getsize(file) == 0
+  header = TRACKED_STATS if file_is_empty else False
   last_idx = get_last_index(file) if not header else 0
   new_data = pd.DataFrame([[ data.get(stat, pd.NA) for stat in TRACKED_STATS ]], index=pd.Index([last_idx+1]))
   new_data.to_csv(file, mode='a', header=header)

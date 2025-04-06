@@ -3,19 +3,20 @@
 # sudo sysctl -w kernel.perf_event_paranoid=1
 
 usage () {
-  echo "usage: ./benchmark.sh <size> <rounds>"
+  echo "usage: ./benchmark.sh <executable> <size> <rounds>"
 }
 
-# Parametros de benchmarking
-if ! [ $# = 2 ]; then
-  usage
-  exit 1
+# Argumentos posicionales
+if [[ $# -ne 3 ]]; then
+    usage
+    exit 4
 fi
 
-SIZE=$1
-ROUNDS=$2
+EXECUTABLE=$1
+SIZE=$2
+ROUNDS=$3
 
-EXECUTABLE="./headless"
+# Estadisticas a seguir
 INSTS="instructions,fp_arith_inst_retired.scalar"
 
 # Parametros de simulacion
@@ -54,4 +55,4 @@ run_benchmark () {
   echo "FLOPS=$FLOPS"
 }
 
-run_benchmark $SIZE $ROUNDS
+run_benchmark

@@ -32,6 +32,7 @@ def consume_line(line: str) -> tuple[str, str]:
   finally:
     return (line, "") if idx == -1 else (line[:idx], line[idx+1:])
 
+# TODO Agregar soporte para line continuation con '\'.
 def parse_assignment(line: str) -> tuple[tuple[str, str, str], str]:
   line = consume_spaces(line)
   var, line = parse_ident(line)
@@ -44,7 +45,7 @@ def parse_assignment(line: str) -> tuple[tuple[str, str, str], str]:
 
 def get_compilation_info():
   c_info = {}
-  with open("Makefile") as f:
+  with open("build_config.mk") as f:
     line = f.read()
     while line:
       (var, op, val), line = parse_assignment(line)
