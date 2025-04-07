@@ -25,12 +25,8 @@ def parse_op(line: str) -> tuple[str, str]:
   return "", line
 
 def consume_line(line: str) -> tuple[str, str]:
-  try:
-    idx = line.index('\n')
-  except ValueError:
-    idx = -1
-  finally:
-    return (line, "") if idx == -1 else (line[:idx], line[idx+1:])
+  idx = line.find('\n')
+  return (line, "") if idx == -1 else (line[:idx], line[idx+1:])
 
 # TODO Agregar soporte para line continuation con '\'.
 def parse_assignment(line: str) -> tuple[tuple[str, str, str], str]:
@@ -39,6 +35,8 @@ def parse_assignment(line: str) -> tuple[tuple[str, str, str], str]:
   if not var:
     return ("", "", ""), line
   op, line = parse_op(line)
+  if op == "":
+    return ("", "", ""), line
   line = consume_spaces(line)
   val, line = consume_line(line)
   return (var, op, val), line
