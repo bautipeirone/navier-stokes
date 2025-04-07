@@ -14,26 +14,37 @@ TRACKED_STATS = [
   "GLIBC_VER"
 ]
 
-def find_prev_line_break(f):
-  pos = f.tell()
-  # buf = ""
-  # buf_size = 128
-  while f.read(1) != '\n' and pos > 0: # Hay que moverse para atras en el stream
-    pos -= 1
+def find_prev_line_break(f, pos):
+  buf_size = 64
+  stop = False
+  idx = -1
+  while idx < 0 and not stop:
+    last_pos = pos
+    pos = max(0, last_pos - buf_size)
+    if pos == 0:
+      stop = True
+      buf_size = last_pos
     f.seek(pos, os.SEEK_SET)
-  return pos
+    buf = f.read(buf_size)
+    idx = buf.rfind('\n')
+  return pos + idx if idx >= 0 else -1
 
 # Asume que existe el archivo y tiene el header escrito
 def get_last_index(file):
   # Lo optimice masivamente para que cargue lo minimo del archivo posible
+  pos = os.path.getsize(file)
   with open(file) as f:
-    f.seek(0, os.SEEK_END)
-    f.seek(find_prev_line_break(f)-1, os.SEEK_SET)
-    f.seek(find_prev_line_break(f)+1, os.SEEK_SET)
+    pos = find_prev_line_break(f, pos)
+    if pos <= 0:
+      return -1
+    pos = find_prev_line_break(f, pos-1)
+    if pos < 0:
+      return -1
+    f.seek(pos+1, os.SEEK_SET)
     line = f.readline()
-  idx = int(line.split(',')[0])
+  col_sep = line.find(',')
+  idx = int(line[:col_sep])
   return idx
-
 
 def save_benchmark(file, data):
   file_is_empty = not os.path.exists(file) or os.path.getsize(file) == 0
