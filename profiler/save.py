@@ -8,10 +8,12 @@ TRACKED_STATS = [
   "LDFLAGS",
   "FLOPS",
   "IPS",
+  "NS_PER_CELL",
+  "MESSAGE",
   "EXE_SIZE",
   "HOST",
   "OS_RELEASE",
-  "GLIBC_VER"
+  "GLIBC_VER",
 ]
 
 def find_prev_line_break(f, pos):
@@ -47,6 +49,7 @@ def get_last_index(file):
   return idx
 
 def save_benchmark(file, data):
+  file = os.path.join("benchmarks", file)
   file_is_empty = not os.path.exists(file) or os.path.getsize(file) == 0
   header = TRACKED_STATS if file_is_empty else False
   last_idx = get_last_index(file) if not header else 0
