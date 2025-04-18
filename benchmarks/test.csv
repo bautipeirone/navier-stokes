@@ -1,0 +1,4 @@
+,SIZE,CC,CFLAGS,LDFLAGS,FLOPS,IPS,EXE_SIZE,HOST,OS_RELEASE,GLIBC_VER
+1,10,gcc,-Wall -Wextra -Wno-unused-parameter -O3 -funroll-loops -march=native -mfpmath=sse -ffast-math,,190553041,797829372,31240,bati-computadora,Ubuntu 24.04.2 LTS,2.39
+2,128,gcc, -Wall -Wextra -Wno-unused-parameter -O2 -funsafe-math-optimizations -ffast-math -funroll-loops -ftree-vectorize -march=native -mtune=native -fopt-info-vec -fopt-info-vec-missed,,47997507,96573456045,199.02 ± 16.45,,27064,bati-computadora,Ubuntu 24.04.2 LTS,2.39
+3,128,gcc, -Wall -Wextra -Wno-unused-parameter -O2 -funsafe-math-optimizations -ffast-math -funroll-loops -ftree-vectorize -march=native -mtune=native -fopt-info-vec -fopt-info-vec-missed,,47607715,101380006436,197.00 ± 27.39,Benchmark de prueba,27064,bati-computadora,Ubuntu 24.04.2 LTS,2.39
