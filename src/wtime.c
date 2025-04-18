@@ -1,12 +1,15 @@
-#include "wtime.h"
+//
+// timing.c
+//
 
-#define _POSIX_C_SOURCE 199309L
-#include <time.h>
+#include <sys/time.h>
+
+#include "wtime.h"
 
 double wtime(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+  struct timeval tv;
+  gettimeofday(&tv, 0);
 
-    return 1e-9 * ts.tv_nsec + (double)ts.tv_sec;
+  return (double) tv.tv_sec + 1e-6 * tv.tv_usec;
 }
