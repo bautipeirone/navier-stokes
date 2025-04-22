@@ -37,8 +37,8 @@ INSTS="instructions,fp_arith_inst_retired.scalar,fp_arith_inst_retired.256b_pack
 TIME_STEP=0.1
 DIFF=0.0
 VISC=0.0
-SOURCE=100.0
 FORCE=5.0
+SOURCE=100.0
 
 LOG_FILE=$LOG_DIR/$(basename $EXECUTABLE).out
 
