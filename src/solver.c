@@ -2,6 +2,8 @@
 
 #include "solver.h"
 #include "indices.h"
+#include <immintrin.h>
+#include <stdio.h>
 
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
@@ -9,7 +11,7 @@
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
 typedef enum { RED, BLACK } grid_color;
 
-static void add_source(unsigned int n, float * x, const float * s, float dt)
+static void add_source(unsigned int n, float * restrict x, const float * restrict s, float dt)
 {
     unsigned int size = (n + 2) * (n + 2);
     for (unsigned int i = 0; i < size; i++) {
@@ -17,19 +19,145 @@ static void add_source(unsigned int n, float * x, const float * s, float dt)
     }
 }
 
-static void set_bnd(unsigned int n, boundary b, float * x)
+static void set_top_bnd(unsigned int n, boundary b, float * restrict p1) {
+  const float coef = b == HORIZONTAL ? -1.0f : 1.0f;
+
+  __m256 coef_v = _mm256_set1_ps(coef);
+
+  // TOP BLK BOUND
+  for (unsigned int i = 1; i <= n/2; i += 8) {
+    int ridx = rb_idx(0, i, n+2);
+    int bidx = rb_idx(1, i, n+2);
+    printf("i: %d, ridx: %d, bidx: %d\n", i, ridx, bidx);
+    if (1)
+      continue;
+
+    __m256i ridx_v = _mm256_set_epi32(ridx + 7, ridx + 6, ridx + 5, ridx + 4, ridx + 3, ridx + 2, ridx + 1, ridx);
+    __m256i bidx_v = _mm256_set_epi32(bidx + 7, bidx + 6, bidx + 5, bidx + 4, bidx + 3, bidx + 2, bidx + 1, bidx);
+    
+    // Gather 8 float values from ap1 using those indices
+    __m256 src = _mm256_i32gather_ps(p1, bidx_v, sizeof(float));
+    
+    // Multiply by coef
+    __m256 result = _mm256_mul_ps(coef_v, src);
+    // float tmp[4];
+    _mm256_storeu_ps(p1 + ridx, result);
+
+    // for (int j = 0; j < 4; ++j)
+    //   // p1[((int*)((void*)lidx_v))[j]] = tmp[j];
+    //   p1[ridx_v[j]] = tmp[j];
+    // Store result to ap2[lidx[i..i+7]] manually (scatter)
+    // _mm256_i32scatter_ps(p1, ridx_v, result, sizeof(float));
+  }
+
+  // TOP RED BOUND
+  for (unsigned int i = 1; i <= n/2; i += 8) {
+    int bidx = rb_idx(0, i, n+2);
+    int ridx = rb_idx(1, i, n+2);
+    
+    __m256i ridx_v = _mm256_set_epi32(ridx + 7, ridx + 6, ridx + 5, ridx + 4, ridx + 3, ridx + 2, ridx + 1, ridx);
+    __m256i bidx_v = _mm256_set_epi32(bidx + 7, bidx + 6, bidx + 5, bidx + 4, bidx + 3, bidx + 2, bidx + 1, bidx);
+    
+    // Gather 8 float values from ap1 using those indices
+    __m256 src = _mm256_i32gather_ps(p1, ridx_v, sizeof(float));
+    
+    // Multiply by coef
+    __m256 result = _mm256_mul_ps(coef_v, src);
+    _mm256_storeu_ps(p1 + bidx, result);
+
+    // for (int j = 0; j < 8; ++j)
+    //   p1[((int*)((void*)lidx_v))[j]] = tmp[j];
+    // Store result to ap2[lidx[i..i+7]] manually (scatter)
+    // _mm256_i32scatter_ps(p1, bidx_v, result, sizeof(float));
+  }
+}
+
+static void set_bot_bnd(unsigned int n, boundary b, float * restrict p1) {
+  const float coef = b == HORIZONTAL ? -1.0f : 1.0f;
+
+  __m256 coef_v = _mm256_set1_ps(coef);
+
+  // TOP RED BOUND
+  for (unsigned int i = 1; i <= n/2; i += 8) {
+    int ridx = rb_idx(n+1, i, n+2);
+    int bidx = rb_idx(n,  i,  n+2);
+    
+    __m256i ridx_v = _mm256_set_epi32(ridx + 7, ridx + 6, ridx + 5, ridx + 4, ridx + 3, ridx + 2, ridx + 1, ridx);
+    __m256i bidx_v = _mm256_set_epi32(bidx + 7, bidx + 6, bidx + 5, bidx + 4, bidx + 3, bidx + 2, bidx + 1, bidx);
+    
+    // Gather 8 float values from ap1 using those indices
+    __m256 src = _mm256_i32gather_ps(p1, bidx_v, sizeof(float));
+    
+    // Multiply by coef
+    __m256 result = _mm256_mul_ps(coef_v, src);
+    // float tmp[4];
+    _mm256_store_ps(p1 + ridx, result);
+
+    // for (int j = 0; j < 4; ++j)
+    //   // p1[((int*)((void*)lidx_v))[j]] = tmp[j];
+    //   p1[ridx_v[j]] = tmp[j];
+    // Store result to ap2[lidx[i..i+7]] manually (scatter)
+    // _mm256_i32scatter_ps(p1, ridx_v, result, sizeof(float));
+  }
+
+  // TOP BLK BOUND
+  for (unsigned int i = 1; i <= n/2; i += 8) {
+    int bidx = rb_idx(n+1, i, n+2);
+    int ridx = rb_idx(n,  i,  n+2);
+    
+    __m256i ridx_v = _mm256_set_epi32(ridx + 7, ridx + 6, ridx + 5, ridx + 4, ridx + 3, ridx + 2, ridx + 1, ridx);
+    __m256i bidx_v = _mm256_set_epi32(bidx + 7, bidx + 6, bidx + 5, bidx + 4, bidx + 3, bidx + 2, bidx + 1, bidx);
+    
+    // Gather 8 float values from ap1 using those indices
+    __m256 src = _mm256_i32gather_ps(p1, ridx_v, sizeof(float));
+    
+    // Multiply by coef
+    __m256 result = _mm256_mul_ps(coef_v, src);
+    _mm256_store_ps(p1 + bidx, result);
+
+    // for (int j = 0; j < 8; ++j)
+    //   p1[((int*)((void*)lidx_v))[j]] = tmp[j];
+    // Store result to ap2[lidx[i..i+7]] manually (scatter)
+    // _mm256_i32scatter_ps(p1, bidx_v, result, sizeof(float));
+  }
+}
+
+static void set_v_bnd(unsigned int n, boundary b, float * x) {
+  const float coef = b == VERTICAL ? -1.0f : 1.0f;
+  for (unsigned int i = 1; i <= n; i++) {
+    x[IX(0, i)]     = coef * x[IX(1, i)];
+    x[IX(n + 1, i)] = coef * x[IX(n, i)];
+  }
+}
+
+// static void set_bnd(unsigned int n, boundary b, float * x)
+// {
+//     // set_top_bnd(n, b, x);
+//     // set_bot_bnd(n, b, x);
+//     // set_v_bnd(n, b, x);
+    
+//     x[IX(0, 0)]         = 0.5f * (x[IX(1, 0)]     + x[IX(0, 1)]);
+//     x[IX(0, n + 1)]     = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
+//     x[IX(n + 1, 0)]     = 0.5f * (x[IX(n, 0)]     + x[IX(n + 1, 1)]);
+//     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
+// }
+
+static void set_bnd(unsigned int n, boundary b, float* x)
 {
+    float vcoef = -1 * (((b == VERTICAL) * 2) - 1);
+    float hcoef = -1 * (((b == HORIZONTAL) * 2) - 1);
     for (unsigned int i = 1; i <= n; i++) {
-        x[IX(0, i)]     = b == VERTICAL ? -x[IX(1, i)] : x[IX(1, i)];
-        x[IX(n + 1, i)] = b == VERTICAL ? -x[IX(n, i)] : x[IX(n, i)];
-        x[IX(i, 0)]     = b == HORIZONTAL ? -x[IX(i, 1)] : x[IX(i, 1)];
-        x[IX(i, n + 1)] = b == HORIZONTAL ? -x[IX(i, n)] : x[IX(i, n)];
+        x[IX(0, i)] = vcoef * x[IX(1, i)];
+        x[IX(n + 1, i)] = vcoef * x[IX(n, i)];
+        x[IX(i, 0)] = hcoef * x[IX(i, 1)];
+        x[IX(i, n + 1)] = hcoef * x[IX(i, n)];
     }
-    x[IX(0, 0)]         = 0.5f * (x[IX(1, 0)]     + x[IX(0, 1)]);
-    x[IX(0, n + 1)]     = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
-    x[IX(n + 1, 0)]     = 0.5f * (x[IX(n, 0)]     + x[IX(n + 1, 1)]);
+    x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
+    x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
+    x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
+
 
 static void lin_solve_rb_step(grid_color color,
                               unsigned int n,
@@ -39,6 +167,8 @@ static void lin_solve_rb_step(grid_color color,
                               const float * restrict neigh,
                               float * restrict same)
 {
+    // color = RED
+    // same0 = red0, same = red, neigh = blk
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
 
@@ -79,36 +209,82 @@ static void diffuse(unsigned int n, boundary b, float * x, const float * x0, flo
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-static void advect(unsigned int n, boundary b, float * d, const float * d0, const float * u, const float * v, float dt)
+// static void advect(unsigned int n, boundary b, float * d, const float * d0, const float * u, const float * v, float dt)
+// {
+//     int i0, i1, j0, j1;
+//     float x, y, s0, t0, s1, t1;
+
+//     float dt0 = dt * n;
+//     for (unsigned int i = 1; i <= n; i++) {
+//         for (unsigned int j = 1; j <= n; j++) {
+//             x = i - dt0 * u[IX(i, j)];
+//             y = j - dt0 * v[IX(i, j)];
+//             if (x < 0.5f) {
+//                 x = 0.5f;
+//             } else if (x > n + 0.5f) {
+//                 x = n + 0.5f;
+//             }
+//             i0 = (int) x;
+//             i1 = i0 + 1;
+//             if (y < 0.5f) {
+//                 y = 0.5f;
+//             } else if (y > n + 0.5f) {
+//                 y = n + 0.5f;
+//             }
+//             j0 = (int) y;
+//             j1 = j0 + 1;
+//             s1 = x - i0;
+//             s0 = 1 - s1;
+//             t1 = y - j0;
+//             t0 = 1 - t1;
+//             d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) +
+//                           s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+//         }
+//     }
+//     set_bnd(n, b, d);
+// }
+
+static inline max(float x, float y) {
+  return x < y ? y : x;
+}
+
+static inline min(float x, float y) {
+  return x < y ? x : y;
+}
+
+static void advect(unsigned int n, boundary b, float* restrict d, float* d0, const float* u, const float* v, float dt)
 {
     int i0, i1, j0, j1;
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
-    for (unsigned int i = 1; i <= n; i++) {
-        for (unsigned int j = 1; j <= n; j++) {
+    for (unsigned int j = 1; j <= n; j++) {
+          for (unsigned int i = 1; i <= n; i++) {
             x = i - dt0 * u[IX(i, j)];
             y = j - dt0 * v[IX(i, j)];
-            if (x < 0.5f) {
-                x = 0.5f;
-            } else if (x > n + 0.5f) {
-                x = n + 0.5f;
-            }
-            i0 = (int) x;
+            x = max(x, 0.5f);
+            x = min(x, n + 0.5f);
+            // if (x < 0.5f) {
+            //     x = 0.5f;
+            // } else if (x > n + 0.5f) {
+            //     x = n + 0.5f;
+            // }
+            i0 = (int)x;
             i1 = i0 + 1;
-            if (y < 0.5f) {
-                y = 0.5f;
-            } else if (y > n + 0.5f) {
-                y = n + 0.5f;
-            }
-            j0 = (int) y;
+            // if (y < 0.5f) {
+            //     y = 0.5f;
+            // } else if (y > n + 0.5f) {
+            //     y = n + 0.5f;
+            // }
+            y = max(y, 0.5f);
+            y = min(y, n + 0.5f);
+            j0 = (int)y;
             j1 = j0 + 1;
             s1 = x - i0;
             s0 = 1 - s1;
             t1 = y - j0;
             t0 = 1 - t1;
-            d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) +
-                          s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+            d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
         }
     }
     set_bnd(n, b, d);

@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "indices.h"
 #include "solver.h"
@@ -65,12 +66,19 @@ static int allocate_data ( void )
 {
 	int size = (N+2)*(N+2);
 
-	u			= (float *) malloc ( size*sizeof(float) );
-	v			= (float *) malloc ( size*sizeof(float) );
-	u_prev		= (float *) malloc ( size*sizeof(float) );
-	v_prev		= (float *) malloc ( size*sizeof(float) );
-	dens		= (float *) malloc ( size*sizeof(float) );
-	dens_prev	= (float *) malloc ( size*sizeof(float) );
+	// u			= (float *) malloc( size*sizeof(float) );
+	// v			= (float *) malloc( size*sizeof(float) );
+	// u_prev		= (float *) malloc( size*sizeof(float) );
+	// v_prev		= (float *) malloc( size*sizeof(float) );
+	// dens		= (float *) malloc( size*sizeof(float) );
+	// dens_prev	= (float *) malloc( size*sizeof(float) );
+
+  assert(posix_memalign(&u, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign(&v, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign(&u_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign(&v_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign(&dens, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign(&dens_prev, 32, size*sizeof(float)) == 0);
 
 	if ( !u || !v || !u_prev || !v_prev || !dens || !dens_prev ) {
 		fprintf ( stderr, "cannot allocate data\n" );
@@ -172,7 +180,7 @@ int main ( int argc, char ** argv )
 	}
 
 	if ( argc == 1 ) {
-		N = 128;
+		N = 64;
 		dt = 0.1f;
 		diff = 0.0f;
 		visc = 0.0f;
