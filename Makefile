@@ -18,6 +18,10 @@ demo: $(SOURCE_DIR)/demo.o $(COMMON_OBJECTS)
 headless: $(SOURCE_DIR)/headless.o $(COMMON_OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
+.PHONY: as
+as: src/solver.o
+	$(CC) $(CFLAGS) $(CDEBUG) $(LDFLAGS) -S src/solver.c
+
 clean:
 	rm -f $(TARGETS) $(SOURCE_DIR)/*.o .depend *~
 

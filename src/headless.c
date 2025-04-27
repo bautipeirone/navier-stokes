@@ -73,12 +73,12 @@ static int allocate_data ( void )
 	// dens		= (float *) malloc( size*sizeof(float) );
 	// dens_prev	= (float *) malloc( size*sizeof(float) );
 
-  assert(posix_memalign(&u, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign(&v, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign(&u_prev, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign(&v_prev, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign(&dens, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign(&dens_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&u, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&v, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&u_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&v_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&dens, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&dens_prev, 32, size*sizeof(float)) == 0);
 
 	if ( !u || !v || !u_prev || !v_prev || !dens || !dens_prev ) {
 		fprintf ( stderr, "cannot allocate data\n" );
@@ -167,7 +167,7 @@ int main ( int argc, char ** argv )
 {
 	int i = 0;
 
-	if ( argc != 1 && argc != 7 ) {
+	if ( argc > 2 && argc != 7 ) {
 		fprintf ( stderr, "usage : %s N dt diff visc force source\n", argv[0] );
 		fprintf ( stderr, "where:\n" );\
 		fprintf ( stderr, "\t N      : grid resolution\n" );
@@ -179,8 +179,8 @@ int main ( int argc, char ** argv )
 		exit ( 1 );
 	}
 
-	if ( argc == 1 ) {
-		N = 64;
+	if ( argc <= 2 ) {
+		N = argc == 2 ? atoi(argv[1]) : 64;
 		dt = 0.1f;
 		diff = 0.0f;
 		visc = 0.0f;

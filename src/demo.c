@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include <GL/glut.h>
 
 #include "indices.h"
@@ -72,12 +73,19 @@ static int allocate_data ( void )
 {
 	int size = (N+2)*(N+2);
 
-	u			= (float *) malloc ( size*sizeof(float) );
-	v			= (float *) malloc ( size*sizeof(float) );
-	u_prev		= (float *) malloc ( size*sizeof(float) );
-	v_prev		= (float *) malloc ( size*sizeof(float) );
-	dens		= (float *) malloc ( size*sizeof(float) );	
-	dens_prev	= (float *) malloc ( size*sizeof(float) );
+	// u			= (float *) malloc( size*sizeof(float) );
+	// v			= (float *) malloc( size*sizeof(float) );
+	// u_prev		= (float *) malloc( size*sizeof(float) );
+	// v_prev		= (float *) malloc( size*sizeof(float) );
+	// dens		= (float *) malloc( size*sizeof(float) );
+	// dens_prev	= (float *) malloc( size*sizeof(float) );
+
+  assert(posix_memalign((void**)&u, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&v, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&u_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&v_prev, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&dens, 32, size*sizeof(float)) == 0);
+  assert(posix_memalign((void**)&dens_prev, 32, size*sizeof(float)) == 0);
 
 	if ( !u || !v || !u_prev || !v_prev || !dens || !dens_prev ) {
 		fprintf ( stderr, "cannot allocate data\n" );
@@ -86,7 +94,6 @@ static int allocate_data ( void )
 
 	return ( 1 );
 }
-
 
 /*
   ----------------------------------------------------------------------

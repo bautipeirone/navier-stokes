@@ -34,11 +34,11 @@ ROUNDS=$3
 INSTS="instructions,fp_arith_inst_retired.scalar,fp_arith_inst_retired.256b_packed_single"
 
 # Parametros de simulacion
-TIME_STEP=0.1
-DIFF=0.0
-VISC=0.0
-FORCE=5.0
-SOURCE=100.0
+# TIME_STEP=0.1
+# DIFF=0.0
+# VISC=0.0
+# FORCE=5.0
+# SOURCE=100.0
 
 LOG_FILE=$LOG_DIR/$(basename $EXECUTABLE).out
 
@@ -50,7 +50,7 @@ run_simulation () {
   SIZE=$1
   # Ejecutar el programa haciendo profiling con perf stat
   # De aca nos quedamos con cantidad de flops y de instrucciones
-  perf stat -e $INSTS $EXECUTABLE $SIZE $TIME_STEP $DIFF $VISC $FORCE $SOURCE >> $LOG_FILE
+  perf stat -e $INSTS $EXECUTABLE $SIZE >> $LOG_FILE
 }
 
 run_profiler () {
