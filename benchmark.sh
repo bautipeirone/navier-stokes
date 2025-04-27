@@ -9,7 +9,6 @@ enable_perf () {
   fi
 }
 
-
 LOG_DIR=logs
 BUILD_DIR=build
 
@@ -17,63 +16,61 @@ mkdir -p $LOG_DIR $BUILD_DIR
 make > /dev/null
 
 usage () {
-  echo "usage: ./benchmark.sh <executable> <size> <rounds>"
+  echo "usage: ./benchmark.sh <executable> <size>"
 }
 
 # Argumentos posicionales
-if [[ $# -ne 3 ]]; then
+if [[ $# -ne 2 ]]; then
     usage
-    exit 4
+    exit 1
 fi
 
 EXECUTABLE=$1
 SIZE=$2
-ROUNDS=$3
-
-# Estadisticas a seguir
-INSTS="instructions,fp_arith_inst_retired.scalar,fp_arith_inst_retired.256b_packed_single"
-
-# Parametros de simulacion
-# TIME_STEP=0.1
-# DIFF=0.0
-# VISC=0.0
-# FORCE=5.0
-# SOURCE=100.0
 
 LOG_FILE=$LOG_DIR/$(basename $EXECUTABLE).out
 
-file_size () {
-  echo $(stat -c%s $1)
+# Estadisticas a seguir
+INSTS=instructions
+SCALAR_FLAG=fp_arith_inst_retired.scalar
+SSE_FLAG=fp_arith_inst_retired.128b_packed_single
+AVX_FLAG=fp_arith_inst_retired.256b_packed_single
+
+EVENTS="$INSTS,$SCALAR_FLAG,$SSE_FLAG,$AVX_FLAG"
+
+get_field_value () {
+  FIELD=$1
+  grep -e "$FIELD" | awk '{ print $1 }' | tr -d ','
 }
 
-run_simulation () {
-  SIZE=$1
+profile () {
   # Ejecutar el programa haciendo profiling con perf stat
   # De aca nos quedamos con cantidad de flops y de instrucciones
-  perf stat -e $INSTS $EXECUTABLE $SIZE >> $LOG_FILE
+  perf stat -e $EVENTS $EXECUTABLE $SIZE >> $LOG_FILE
 }
 
-run_profiler () {
-  IPS=0
-  FLOPS=0
-  : > $LOG_FILE
-  for i in $(seq 1 $ROUNDS); do
-    read IPS_TMP FLOPS_TMP < <(run_simulation $SIZE 2>&1 | grep -E "inst|ops" | tr -d ',' | awk '{if (NR <= 2) {ips+=$1} else {flops=$1}} END {print ips, flops}')
-    IPS=$(( $IPS + $IPS_TMP ))
-    FLOPS=$(( $FLOPS + $FLOPS_TMP ))
-  done
-  IPS=$(( $IPS / $ROUNDS ))
-  FLOPS=$(( $FLOPS / $ROUNDS ))
-  echo $IPS $FLOPS
+log_profiling () {
+  read ATOM_INSTS < <(get_field_value "cpu_atom"     < $PROF_FILE)
+  read CORE_INSTS < <(get_field_value "cpu_core"     < $PROF_FILE)
+  read SCALAR_OPS < <(get_field_value $SCALAR_FLAG   < $PROF_FILE)
+  read SSE_OPS    < <(get_field_value $SSE_FLAG      < $PROF_FILE)
+  read AVX_OPS    < <(get_field_value $AVX_FLAG      < $PROF_FILE)
+  read USER_TIME  < <(get_field_value "seconds user" < $PROF_FILE)
+  TOTAL_INSTS=$(( $ATOM_INSTS + $CORE_INSTS ))
+  TOTAL_FLOPS=$(( $SCALAR_OPS + $SSE_OPS * 4 + $AVX_OPS * 8 ))
+  echo "N=$SIZE"
+  echo "TOTAL_FLOPS (M)=$(( $TOTAL_FLOPS / 1000000 ))"
+  echo "FLOPS/IPS (%)=$(bc -l <<< "scale=2; $TOTAL_FLOPS/$TOTAL_INSTS * 100")"
+  echo "USER_TIME=$USER_TIME"
+  echo "FLOPS/ns=$(bc -l <<< "scale=0; $TOTAL_FLOPS / ($USER_TIME * 1000000)")"
 }
 
 run_benchmark () {
-  echo "$ROUNDS benchmarks, N=$SIZE"
-  echo "EXE_SIZE=$(file_size $EXECUTABLE)"
-  read IPS FLOPS < <(run_profiler)
-  echo "IPS=$IPS"
-  echo "FLOPS=$FLOPS"
+  profile 2> $PROF_FILE
+  log_profiling
 }
 
+PROF_FILE=prof.tmp
 enable_perf
 run_benchmark
+# rm $PROF_FILE
