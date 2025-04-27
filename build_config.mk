@@ -8,6 +8,7 @@ CFLAGS+=-march=native -mtune=native
 # Banderas lab2
 CFLAGS+=-ftree-vectorize
 CFLAGS+=-DAUTOVEC
+CFLAGS+=-DINTRINSICS
 CDEBUG=
 
 ifeq ($(CC), gcc)
