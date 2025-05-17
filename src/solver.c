@@ -3,15 +3,21 @@
 #include "solver.h"
 #include "indices.h"
 #include <immintrin.h>
+#include <omp.h>
 
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 
+#ifdef OMP
+  #define PARALLEL_FOR _Pragma("omp parallel for")
+#else
+  #define PARALLEL_FOR
+#endif
 #ifdef AUTOVEC
 #if defined(__INTEL_LLVM_COMPILER) // Compilando con icx
 #define VECTORIZE_LOOP \
   _Pragma("ivdep") \
-  _Pragma("vector always") \
+  _Pragma("vector always")
 #elif defined(__clang__) // Compilando con clang
   #define VECTORIZE_LOOP _Pragma("clang loop vectorize(assume_safety)")
 #elif defined(__GNUC__) // Compilando con gcc
@@ -30,6 +36,7 @@ static void add_source(unsigned int n, float * restrict x, const float * restric
     unsigned int size = (n + 2) * (n + 2);
     float *x_al = __builtin_assume_aligned((void*) x, 32);
     float *s_al = __builtin_assume_aligned((void*) s, 32);
+    PARALLEL_FOR
     for (unsigned int i = 0; i < size; i++) {
         x_al[i] += dt * s_al[i];
     }
@@ -37,7 +44,8 @@ static void add_source(unsigned int n, float * restrict x, const float * restric
 
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
-    VECTORIZE_LOOP
+  // VECTORIZE_LOOP
+    PARALLEL_FOR
     for (unsigned int i = 1; i <= n; i++) {
         x[IX(0, i)]     = (b == VERTICAL)   ? x[IX(1, i)] : -x[IX(1, i)];
         x[IX(n + 1, i)] = (b == VERTICAL)   ? x[IX(n, i)] : -x[IX(n, i)];
@@ -66,7 +74,7 @@ static void lin_solve_rb_step(grid_color color,
     unsigned int width = (n + 2) / 2;
 
     for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
-      VECTORIZE_LOOP
+      PARALLEL_FOR
       for (unsigned int x = 0; x < width - 1; ++x) {
             int index = idx(x+start, y, width);
             same[index] = (same0[index] + a * (neigh[index - width] +
@@ -170,6 +178,7 @@ static void advect(unsigned int n, boundary b, float* restrict d, float* d0, con
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
+    PARALLEL_FOR
     for (unsigned int j = 1; j <= n; j++) {
           VECTORIZE_LOOP
           for (unsigned int i = 1; i <= n; i++) {
@@ -195,6 +204,7 @@ static void advect(unsigned int n, boundary b, float* restrict d, float* d0, con
 
 static void project(unsigned int n, float * restrict u, float * restrict v, float * restrict p, float * restrict div)
 {
+    PARALLEL_FOR
     for (unsigned int i = 1; i <= n; i++) {
         VECTORIZE_LOOP
         for (unsigned int j = 1; j <= n; j++) {

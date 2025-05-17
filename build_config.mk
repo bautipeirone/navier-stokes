@@ -1,4 +1,4 @@
-CC=ispc
+CC=clang
 # Banderas basicas de compilacion
 CFLAGS=-Wall -Wextra -Wno-unused-parameter
 # Banderas lab1
@@ -7,9 +7,12 @@ CFLAGS+=-march=native -mtune=native
 #-funsafe-loop-optimizations #-fno-tree-loop-distribute-patterns
 # Banderas lab2
 CFLAGS+=-ftree-vectorize
-CFLAGS+=-DAUTOVEC
-CFLAGS+=-DINTRINSICS
+# CFLAGS+=-DAUTOVEC
+# CFLAGS+=-DINTRINSICS
 CDEBUG=
+# Banderas lab3
+CFLAGS+=-fopenmp -DOMP
+#OMP_NUM_THREADS=
 
 ifeq ($(CC), gcc)
     CDEBUG+=-fopt-info-vec -fopt-info-vec-missed
