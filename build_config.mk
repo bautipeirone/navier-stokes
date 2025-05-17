@@ -1,4 +1,4 @@
-CC=clang
+CC=ispc
 # Banderas basicas de compilacion
 CFLAGS=-Wall -Wextra -Wno-unused-parameter
 # Banderas lab1

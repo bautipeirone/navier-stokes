@@ -3,8 +3,6 @@
 #include "solver.h"
 #include "indices.h"
 #include <immintrin.h>
-#include <stdio.h>
-#include <assert.h>
 
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
@@ -14,7 +12,6 @@
 #define VECTORIZE_LOOP \
   _Pragma("ivdep") \
   _Pragma("vector always") \
-
 #elif defined(__clang__) // Compilando con clang
   #define VECTORIZE_LOOP _Pragma("clang loop vectorize(assume_safety)")
 #elif defined(__GNUC__) // Compilando con gcc

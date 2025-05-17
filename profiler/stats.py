@@ -4,7 +4,7 @@ import numpy as np
 
 
 def run_profiler(binary_exe: str, size: int, iters: int):
-  program = ["./benchmark.sh", binary_exe, str(size), str(iters)]
+  program = ["./benchmark.sh", binary_exe, str(size)]
   profiling_file = os.path.basename(binary_exe) + ".prof"
   log_file = os.path.join("logs", os.path.basename(binary_exe) + ".out")
   with open(profiling_file, "w") as f:
@@ -36,4 +36,4 @@ def get_runtime_stats(log_file: str):
     lines = f.readlines()
   cells = list(map(lambda line: float(line.split(',')[0]), lines))
   cells = np.array(cells)
-  return { "NS_PER_CELL": f"{np.mean(cells):.2f} ± {np.std(cells):.2f}" } # (μ ± σ)
+  return { "NS_PER_CELL": f"{np.min(cells):.2f}" }
