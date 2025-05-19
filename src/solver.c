@@ -8,8 +8,21 @@
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 
+#define OMP_PARALLEL_RANGE(start, end, total)                    \
+{                                                                \
+  unsigned start, end;                                           \
+  _Pragma("omp parallel")                                        \
+  {                                                              \
+    int _tid = omp_get_thread_num();                           \
+    int _nthr = omp_get_num_threads();                         \
+    int _chunk = ((total) + _nthr - 1) / _nthr;                \
+    start = _tid * _chunk;                                     \
+    end = start + _chunk;                                      \
+    if (end > (total)) end = (total);                          \
+  }
+
 #ifdef OMP
-  #define PARALLEL_FOR _Pragma("omp parallel for")
+  #define PARALLEL_FOR _Pragma("omp parallel for simd")
 #else
   #define PARALLEL_FOR
 #endif
@@ -37,20 +50,36 @@ static void add_source(unsigned int n, float * restrict x, const float * restric
     float *x_al = __builtin_assume_aligned((void*) x, 32);
     float *s_al = __builtin_assume_aligned((void*) s, 32);
     PARALLEL_FOR
-    for (unsigned int i = 0; i < size; i++) {
+    VECTORIZE_LOOP
+    for (unsigned i = 0; i < size; i++) {
         x_al[i] += dt * s_al[i];
     }
+    // #pragma omp parallel
+    // {
+    //   int tid  = omp_get_thread_num();
+    //   int nthr = omp_get_num_threads();
+
+    //   // reparto simple: cada hilo calcula su bloque [start,end)
+    //   unsigned chunk = (size + nthr - 1) / nthr;
+    //   unsigned start = tid * chunk;
+    //   unsigned end   = start + chunk;
+    //   if (end > size) end = size;
+    //   VECTORIZE_LOOP
+    //   for (unsigned i = start; i < end; i++) {
+    //       x_al[i] += dt * s_al[i];
+    //   }
+    // }
 }
 
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
-  // VECTORIZE_LOOP
-    PARALLEL_FOR
+  // PARALLEL_FOR
+  VECTORIZE_LOOP
     for (unsigned int i = 1; i <= n; i++) {
-        x[IX(0, i)]     = (b == VERTICAL)   ? x[IX(1, i)] : -x[IX(1, i)];
-        x[IX(n + 1, i)] = (b == VERTICAL)   ? x[IX(n, i)] : -x[IX(n, i)];
-        x[IX(i, 0)]     = (b == HORIZONTAL) ? x[IX(i, 1)] : -x[IX(i, 1)];
-        x[IX(i, n + 1)] = (b == HORIZONTAL) ? x[IX(i, n)] : -x[IX(i, n)];
+        x[IX(0, i)]     = (b == VERTICAL)   ? -x[IX(1, i)] : x[IX(1, i)];
+        x[IX(n + 1, i)] = (b == VERTICAL)   ? -x[IX(n, i)] : x[IX(n, i)];
+        x[IX(i, 0)]     = (b == HORIZONTAL) ? -x[IX(i, 1)] : x[IX(i, 1)];
+        x[IX(i, n + 1)] = (b == HORIZONTAL) ? -x[IX(i, n)] : x[IX(i, n)];
     }
     x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
     x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
@@ -74,7 +103,7 @@ static void lin_solve_rb_step(grid_color color,
     unsigned int width = (n + 2) / 2;
 
     for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
-      PARALLEL_FOR
+      // PARALLEL_FOR
       for (unsigned int x = 0; x < width - 1; ++x) {
             int index = idx(x+start, y, width);
             same[index] = (same0[index] + a * (neigh[index - width] +
@@ -178,8 +207,9 @@ static void advect(unsigned int n, boundary b, float* restrict d, float* d0, con
     float x, y, s0, t0, s1, t1;
 
     float dt0 = dt * n;
-    PARALLEL_FOR
+    // PARALLEL_FOR
     for (unsigned int j = 1; j <= n; j++) {
+          // PARALLEL_FOR
           VECTORIZE_LOOP
           for (unsigned int i = 1; i <= n; i++) {
             x = i - dt0 * u[IX(i, j)];
@@ -204,13 +234,14 @@ static void advect(unsigned int n, boundary b, float* restrict d, float* d0, con
 
 static void project(unsigned int n, float * restrict u, float * restrict v, float * restrict p, float * restrict div)
 {
-    PARALLEL_FOR
-    for (unsigned int i = 1; i <= n; i++) {
-        VECTORIZE_LOOP
-        for (unsigned int j = 1; j <= n; j++) {
-            div[IX(i, j)] = -0.5f * (u[IX(i + 1, j)] - u[IX(i - 1, j)] +
-                                     v[IX(i, j + 1)] - v[IX(i, j - 1)]) / n;
-            p[IX(i, j)] = 0;
+    OMP_PARALLEL_RANGE(start, end, n)
+        for (unsigned int i = start+1; i <= end; i++) {
+            VECTORIZE_LOOP
+            for (unsigned int j = 1; j <= n; j++) {
+                div[IX(i, j)] = -0.5f * (u[IX(i + 1, j)] - u[IX(i - 1, j)] +
+                                        v[IX(i, j + 1)] - v[IX(i, j - 1)]) / n;
+                p[IX(i, j)] = 0;
+            }
         }
     }
     set_bnd(n, NONE, div);
@@ -218,13 +249,16 @@ static void project(unsigned int n, float * restrict u, float * restrict v, floa
 
     lin_solve(n, NONE, p, div, 1, 4);
 
-    for (unsigned int i = 1; i <= n; i++) {
-        VECTORIZE_LOOP
-        for (unsigned int j = 1; j <= n; j++) {
-            u[IX(i, j)] -= 0.5f * n * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
-            v[IX(i, j)] -= 0.5f * n * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
-          }
+    // PARALLEL_FOR
+    OMP_PARALLEL_RANGE(start, end, n)
+        for (unsigned int i = start+1; i <= end; i++) {
+            VECTORIZE_LOOP
+            for (unsigned int j = 1; j <= n; j++) {
+                u[IX(i, j)] -= 0.5f * n * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
+                v[IX(i, j)] -= 0.5f * n * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
+            }
         }
+    }
     set_bnd(n, VERTICAL, u);
     set_bnd(n, HORIZONTAL, v);
 }

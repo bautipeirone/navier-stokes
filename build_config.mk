@@ -7,7 +7,7 @@ CFLAGS+=-march=native -mtune=native
 #-funsafe-loop-optimizations #-fno-tree-loop-distribute-patterns
 # Banderas lab2
 CFLAGS+=-ftree-vectorize
-# CFLAGS+=-DAUTOVEC
+CFLAGS+=-DAUTOVEC
 # CFLAGS+=-DINTRINSICS
 CDEBUG=
 # Banderas lab3
