@@ -11,24 +11,28 @@
 
 
 #define PRINT_THREAD printf("threadId: %d\n", omp_get_thread_num())
-#define OMP_PARALLEL_RANGE(start, end, total)                    \
-{                                                                \
-  _Pragma("omp parallel")                                        \
-  {                                                              \
-    unsigned start, end;                                           \
+#define OMP_PARALLEL_RANGE(start, end, total)                  \
+{                                                              \
+  _Pragma("omp parallel")                                      \
+  {                                                            \
+    unsigned start, end;                                       \
     int _tid = omp_get_thread_num();                           \
     int _nthr = omp_get_num_threads();                         \
     int _chunk = ((total) + _nthr - 1) / _nthr;                \
     start = _tid * _chunk;                                     \
     end = start + _chunk;                                      \
     if (end > (total)) end = (total);                          \
-
+    
 #define OMP_PARALLEL_RANGE_END }}
+
+#ifndef NUM_BLOCKS
+  #define NUM_BLOCKS 12
+#endif
 
 #ifdef OMP
   #define PARALLEL_FOR _Pragma("omp parallel for simd")
 #else
-  #define PARALLEL_FOR
+#define PARALLEL_FOR
 #endif
 #ifdef AUTOVEC
 #if defined(__INTEL_LLVM_COMPILER) // Compilando con icx
@@ -80,27 +84,36 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 
 
 static void lin_solve_rb_step(grid_color color,
-                              unsigned int n,
-                              float a,
-                              float c,
-                              const float * restrict same0,
-                              const float * restrict neigh,
-                              float * restrict same)
-{
+  unsigned int n,
+  float a,
+  float c,
+  const float * restrict same0,
+  const float * restrict neigh,
+  float * restrict same)
+  {
 #ifndef INTRINISCS
-    int shift = color == RED ? 1 : -1;
-    unsigned int start = color == RED ? 0 : 1;
-
     unsigned int width = (n + 2) / 2;
+    unsigned int block_size = width * NUM_BLOCKS;
 
-    for (unsigned int y = 1; y <= n; ++y, shift = -shift, start = 1 - start) {
-      // PARALLEL_FOR
-      for (unsigned int x = 0; x < width - 1; ++x) {
-            int index = idx(x+start, y, width);
-            same[index] = (same0[index] + a * (neigh[index - width] +
-                                               neigh[index] +
-                                               neigh[index + shift] +
-                                               neigh[index + width])) / c;
+    #pragma omp parallel for
+    for (unsigned int i = 0; i < (n / NUM_BLOCKS) ; i++) {
+        const float* restrict same0_i = same0 + (i * block_size);
+        const float* restrict neigh_i = neigh + (i * block_size);                                                                                                                 
+        float* restrict same_i = same + (i * block_size);                      
+
+        int shift = color == RED ? 1 : -1;
+        unsigned int start = color == RED ? 0 : 1;
+
+        for (unsigned int y = 1; y <= NUM_BLOCKS; ++y) {
+            for(unsigned int x = start; x < width - (1-start); ++x){
+                int index = idx(x,y,width);  
+                same_i[index] = (same0_i[index] + a * (neigh_i[index - width] +
+                neigh_i[index] +
+                neigh_i[index + shift] +
+                neigh_i[index + width])) / c;
+            }
+            shift = -shift;
+            start = 1 - start;
         }
     }
 #else
