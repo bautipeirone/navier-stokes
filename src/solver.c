@@ -4,22 +4,26 @@
 #include "indices.h"
 #include <immintrin.h>
 #include <omp.h>
+#include <stdio.h>
 
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 
+
+#define PRINT_THREAD printf("threadId: %d\n", omp_get_thread_num())
 #define OMP_PARALLEL_RANGE(start, end, total)                    \
 {                                                                \
-  unsigned start, end;                                           \
   _Pragma("omp parallel")                                        \
   {                                                              \
+    unsigned start, end;                                           \
     int _tid = omp_get_thread_num();                           \
     int _nthr = omp_get_num_threads();                         \
     int _chunk = ((total) + _nthr - 1) / _nthr;                \
     start = _tid * _chunk;                                     \
     end = start + _chunk;                                      \
     if (end > (total)) end = (total);                          \
-  }
+
+#define OMP_PARALLEL_RANGE_END }}
 
 #ifdef OMP
   #define PARALLEL_FOR _Pragma("omp parallel for simd")
@@ -52,35 +56,22 @@ static void add_source(unsigned int n, float * restrict x, const float * restric
     PARALLEL_FOR
     VECTORIZE_LOOP
     for (unsigned i = 0; i < size; i++) {
-        x_al[i] += dt * s_al[i];
+      x_al[i] += dt * s_al[i];
     }
-    // #pragma omp parallel
-    // {
-    //   int tid  = omp_get_thread_num();
-    //   int nthr = omp_get_num_threads();
-
-    //   // reparto simple: cada hilo calcula su bloque [start,end)
-    //   unsigned chunk = (size + nthr - 1) / nthr;
-    //   unsigned start = tid * chunk;
-    //   unsigned end   = start + chunk;
-    //   if (end > size) end = size;
-    //   VECTORIZE_LOOP
-    //   for (unsigned i = start; i < end; i++) {
-    //       x_al[i] += dt * s_al[i];
-    //   }
-    // }
 }
 
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
   // PARALLEL_FOR
+  // OMP_PARALLEL_RANGE(start, end, n)
   VECTORIZE_LOOP
-    for (unsigned int i = 1; i <= n; i++) {
-        x[IX(0, i)]     = (b == VERTICAL)   ? -x[IX(1, i)] : x[IX(1, i)];
-        x[IX(n + 1, i)] = (b == VERTICAL)   ? -x[IX(n, i)] : x[IX(n, i)];
-        x[IX(i, 0)]     = (b == HORIZONTAL) ? -x[IX(i, 1)] : x[IX(i, 1)];
-        x[IX(i, n + 1)] = (b == HORIZONTAL) ? -x[IX(i, n)] : x[IX(i, n)];
-    }
+  for (unsigned int i = 0+1; i < n+1; i++) {
+      x[IX(0, i)]     = (b == VERTICAL)   ? -x[IX(1, i)] : x[IX(1, i)];
+      x[IX(n + 1, i)] = (b == VERTICAL)   ? -x[IX(n, i)] : x[IX(n, i)];
+      x[IX(i, 0)]     = (b == HORIZONTAL) ? -x[IX(i, 1)] : x[IX(i, 1)];
+      x[IX(i, n + 1)] = (b == HORIZONTAL) ? -x[IX(i, n)] : x[IX(i, n)];
+  }
+  // OMP_PARALLEL_RANGE_END
     x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
     x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
     x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
@@ -203,47 +194,51 @@ static inline float min(float x, float y) {
 
 static void advect(unsigned int n, boundary b, float* restrict d, float* d0, const float* u, const float* v, float dt)
 {
-    int i0, i1, j0, j1;
-    float x, y, s0, t0, s1, t1;
-
     float dt0 = dt * n;
     // PARALLEL_FOR
-    for (unsigned int j = 1; j <= n; j++) {
-          // PARALLEL_FOR
-          VECTORIZE_LOOP
-          for (unsigned int i = 1; i <= n; i++) {
-            x = i - dt0 * u[IX(i, j)];
-            y = j - dt0 * v[IX(i, j)];
-            x = max(x, 0.5f);
-            x = min(x, n + 0.5f);
-            i0 = (int)x;
-            i1 = i0 + 1;
-            y = max(y, 0.5f);
-            y = min(y, n + 0.5f);
-            j0 = (int)y;
-            j1 = j0 + 1;
-            s1 = x - i0;
-            s0 = 1 - s1;
-            t1 = y - j0;
-            t0 = 1 - t1;
-            d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+    OMP_PARALLEL_RANGE(start, end, n)
+        for (unsigned int j = start+1; j < end+1; j++) {
+            // PARALLEL_FOR
+            int i0, i1, j0, j1;
+            float x, y, s0, t0, s1, t1;
+            VECTORIZE_LOOP
+            for (unsigned int i = 1; i <= n; i++) {
+                x = i - dt0 * u[IX(i, j)];
+                y = j - dt0 * v[IX(i, j)];
+                x = max(x, 0.5f);
+                x = min(x, n + 0.5f);
+                i0 = (int)x;
+                i1 = i0 + 1;
+                y = max(y, 0.5f);
+                y = min(y, n + 0.5f);
+                j0 = (int)y;
+                j1 = j0 + 1;
+                s1 = x - i0;
+                s0 = 1 - s1;
+                t1 = y - j0;
+                t0 = 1 - t1;
+                d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+            }
         }
-    }
+    OMP_PARALLEL_RANGE_END
     set_bnd(n, b, d);
 }
 
 static void project(unsigned int n, float * restrict u, float * restrict v, float * restrict p, float * restrict div)
 {
-    OMP_PARALLEL_RANGE(start, end, n)
-        for (unsigned int i = start+1; i <= end; i++) {
+    OMP_PARALLEL_RANGE(start1, end1, n)
+        // printf("Thread %d in range [%d,%d), total: %d\n", omp_get_thread_num(), start+1, end+1, n);
+        for (unsigned i = start1+1; i < end1+1; i++) {
+            // printf("Thread %d, i: %d\n", omp_get_thread_num(), i);
+            // fflush(stdout);
             VECTORIZE_LOOP
-            for (unsigned int j = 1; j <= n; j++) {
+            for (unsigned int j = 1; j < n+1; j++) {
                 div[IX(i, j)] = -0.5f * (u[IX(i + 1, j)] - u[IX(i - 1, j)] +
                                         v[IX(i, j + 1)] - v[IX(i, j - 1)]) / n;
                 p[IX(i, j)] = 0;
             }
         }
-    }
+    OMP_PARALLEL_RANGE_END
     set_bnd(n, NONE, div);
     set_bnd(n, NONE, p);
 
@@ -251,14 +246,14 @@ static void project(unsigned int n, float * restrict u, float * restrict v, floa
 
     // PARALLEL_FOR
     OMP_PARALLEL_RANGE(start, end, n)
-        for (unsigned int i = start+1; i <= end; i++) {
+        for (unsigned int i = start+1; i < end+1; i++) {
             VECTORIZE_LOOP
             for (unsigned int j = 1; j <= n; j++) {
                 u[IX(i, j)] -= 0.5f * n * (p[IX(i + 1, j)] - p[IX(i - 1, j)]);
                 v[IX(i, j)] -= 0.5f * n * (p[IX(i, j + 1)] - p[IX(i, j - 1)]);
             }
         }
-    }
+    OMP_PARALLEL_RANGE_END
     set_bnd(n, VERTICAL, u);
     set_bnd(n, HORIZONTAL, v);
 }
