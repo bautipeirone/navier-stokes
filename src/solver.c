@@ -49,20 +49,38 @@
   #define VECTORIZE_LOOP
 #endif
 
+#define __CUDACC__
+
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
 typedef enum { RED, BLACK } grid_color;
 
+#ifdef __CUDACC__
+__global__ void add_source_kernel(unsigned int n, float *x, const float *s, float dt)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned int size = (n + 2) * (n + 2);
+  if (i < size) {
+    x[i] += dt * s[i];
+  }
+}
+
+static void add_source(unsigned int n, float *x, const float *s, float dt)
+{
+  unsigned int size = (n + 2) * (n + 2);
+  int threadsPerBlock = 256;
+  int numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+  add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
+}
+
+#else
 static void add_source(unsigned int n, float * restrict x, const float * restrict s, float dt)
 {
-    unsigned int size = (n + 2) * (n + 2);
-    float *x_al = __builtin_assume_aligned((void*) x, 32);
-    float *s_al = __builtin_assume_aligned((void*) s, 32);
-    PARALLEL_FOR
-    VECTORIZE_LOOP
-    for (unsigned i = 0; i < size; i++) {
-      x_al[i] += dt * s_al[i];
-    }
+  unsigned int size = (n + 2) * (n + 2);
+  for (unsigned i = 0; i < size; i++) {
+    x[i] += dt * s[i];
+  }
 }
+#endif
 
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
