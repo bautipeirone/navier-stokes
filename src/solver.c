@@ -50,6 +50,9 @@
 #endif
 
 #define __CUDACC__
+#ifdef __CUDACC__
+int threadsPerBlock = 1024;
+#endif
 
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
 typedef enum { RED, BLACK } grid_color;
@@ -67,8 +70,16 @@ __global__ void add_source_kernel(unsigned int n, float *x, const float *s, floa
 static void add_source(unsigned int n, float *x, const float *s, float dt)
 {
   unsigned int size = (n + 2) * (n + 2);
-  int threadsPerBlock = 256;
   int numBlocks = (size + threadsPerBlock - 1) / threadsPerBlock;
+  
+  // Check if the number of blocks exceeds the maximum allowed
+  int maxBlocks = 65535; // Maximum number of blocks (adjust if needed)
+  while (numBlocks > maxBlocks) {
+    add_source_kernel<<<maxBlocks, threadsPerBlock>>>(n, x, s, dt);
+    x += maxBlocks * threadsPerBlock;
+    s += maxBlocks * threadsPerBlock;
+    numBlocks -= maxBlocks;
+  }
   add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
 }
 
@@ -82,11 +93,32 @@ static void add_source(unsigned int n, float * restrict x, const float * restric
 }
 #endif
 
+#ifdef __CUDACC__
+
+__global__ void set_bnd_kernel(unsigned int n, boundary b, float* x)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+  // int 
+  if (i < n + 1) {
+    x[IX(0, i)]     = (b == VERTICAL)   ? -x[IX(1, i)] : x[IX(1, i)];
+    x[IX(n + 1, i)] = (b == VERTICAL)   ? -x[IX(n, i)] : x[IX(n, i)];
+    x[IX(i, 0)]     = (b == HORIZONTAL) ? -x[IX(i, 1)] : x[IX(i, 1)];
+    x[IX(i, n + 1)] = (b == HORIZONTAL) ? -x[IX(i, n)] : x[IX(i, n)];
+  }
+}
+
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
-  // PARALLEL_FOR
-  // OMP_PARALLEL_RANGE(start, end, n)
-  VECTORIZE_LOOP
+    int numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+    set_bnd_kernel<<<numBlocks, threadsPerBlock>>>(n, b, x);
+    x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
+    x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
+    x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
+    x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
+}
+#else
+static void set_bnd(unsigned int n, boundary b, float* x)
+{
   for (unsigned int i = 0+1; i < n+1; i++) {
       x[IX(0, i)]     = (b == VERTICAL)   ? -x[IX(1, i)] : x[IX(1, i)];
       x[IX(n + 1, i)] = (b == VERTICAL)   ? -x[IX(n, i)] : x[IX(n, i)];
@@ -99,7 +131,7 @@ static void set_bnd(unsigned int n, boundary b, float* x)
     x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
     x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
 }
-
+#endif
 
 static void lin_solve_rb_step(grid_color color,
   unsigned int n,
@@ -111,13 +143,12 @@ static void lin_solve_rb_step(grid_color color,
   {
 #ifndef INTRINISCS
     unsigned int width = (n + 2) / 2;
-    unsigned int block_size = width * NUM_BLOCKS;
+    unsigned int block_size = 1024 / n;
 
-    #pragma omp parallel for
     for (unsigned int i = 0; i < (n / NUM_BLOCKS) ; i++) {
         const float* restrict same0_i = same0 + (i * block_size);
-        const float* restrict neigh_i = neigh + (i * block_size);                                                                                                                 
-        float* restrict same_i = same + (i * block_size);                      
+        const float* restrict neigh_i = neigh + (i * block_size);
+        float* restrict same_i = same + (i * block_size);             
 
         int shift = color == RED ? 1 : -1;
         unsigned int start = color == RED ? 0 : 1;
