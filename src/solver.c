@@ -52,6 +52,7 @@
 #define __CUDACC__
 #ifdef __CUDACC__
 int threadsPerBlock = 1024;
+__constant__ float ro_mem[threadsPerBlock];
 #endif
 
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
@@ -145,26 +146,23 @@ static void lin_solve_rb_step(grid_color color,
     unsigned int width = (n + 2) / 2;
     unsigned int block_size = 1024 / n;
 
-    for (unsigned int i = 0; i < (n / NUM_BLOCKS) ; i++) {
-        const float* restrict same0_i = same0 + (i * block_size);
-        const float* restrict neigh_i = neigh + (i * block_size);
-        float* restrict same_i = same + (i * block_size);             
+    unsigned y = blockIdx.y;
+    unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    int shift = color == RED ? 1 : -1;
+    unsigned int start = color == RED ? 0 : 1;
+    
+    // for (unsigned int i = 0; i < ((n+2) / NUM_BLOCKS) ; i++) {
+    // const float* restrict same0_i = same0 + (i * block_size);
+    // const float* restrict neigh_i = neigh + (i * block_size);
+    // float* restrict same_i = same + (i * block_size);             
 
-        int shift = color == RED ? 1 : -1;
-        unsigned int start = color == RED ? 0 : 1;
-
-        for (unsigned int y = 1; y <= NUM_BLOCKS; ++y) {
-            for(unsigned int x = start; x < width - (1-start); ++x){
-                int index = idx(x,y,width);  
-                same_i[index] = (same0_i[index] + a * (neigh_i[index - width] +
-                neigh_i[index] +
-                neigh_i[index + shift] +
-                neigh_i[index + width])) / c;
-            }
-            shift = -shift;
-            start = 1 - start;
-        }
-    }
+    int index = idx(x+start,y+1,width);
+    same[index] = (same0[index] + a * (neigh[index - width] +
+    neigh[index] +
+    neigh[index + (y % 2 == 0 ? shift : -shift)] +
+    neigh[index + width])) / c;
+    // }
 #else
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
@@ -220,7 +218,32 @@ static void lin_solve_rb_step(grid_color color,
 #endif
 }
 
+#ifdef __CUDACC__
+__global__ void lin_solve(unsigned int n, boundary b,
+                      float * restrict x,
+                      const float * restrict x0,
+                      float a, float c)
+{
+    unsigned int color_size = (n + 2) * ((n + 2) / 2);
+    const float * red0 = x0;
+    const float * blk0 = x0 + color_size;
+    float * red = x;
+    float * blk = x + color_size;
 
+    unsigned int blocksPerRow = (((n / 2) + 1023) / 1024);
+    dim3 grid(blocksPerRow, n);
+    dim3 block(1024, 1);
+    unsigned y = blockIdx.y;
+    unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
+    for (unsigned int k = 0; k < 20; ++k) {
+        // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
+        lin_solve_rb_step<<<grid, block>>>(RED, n, a, c, red0, blk, red);
+        // cudaMemcpyToSymbol(ro_mem, blk0, threadsPerBlock * sizeof(float));
+        lin_solve_rb_step<<<grid, block>>>(BLACK, n, a, c, blk0, red, blk);
+        set_bnd(n, b, x);
+    }
+  }
+#else
 static void lin_solve(unsigned int n, boundary b,
                       float * restrict x,
                       const float * restrict x0,
@@ -238,6 +261,7 @@ static void lin_solve(unsigned int n, boundary b,
         set_bnd(n, b, x);
     }
 }
+#endif
 
 static void diffuse(unsigned int n, boundary b, float * x, const float * x0, float diff, float dt)
 {
