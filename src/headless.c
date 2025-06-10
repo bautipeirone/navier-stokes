@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <cuda_runtime.h>
 #include "indices.h"
 #include "solver.h"
 #include "wtime.h"
@@ -32,9 +33,11 @@ static int N;
 static float dt, diff, visc;
 static float force, source;
 
-static float * u, * v, * u_prev, * v_prev;
-static float * dens, * dens_prev;
+static float * h_u, * h_v, * h_u_prev, * h_v_prev;
+static float * h_dens, * h_dens_prev;
 
+float * d_u, * d_v, * d_u_prev, * d_v_prev;
+float * d_dens, * d_dens_prev;
 
 /*
   ----------------------------------------------------------------------
@@ -45,12 +48,18 @@ static float * dens, * dens_prev;
 
 static void free_data ( void )
 {
-	if ( u ) free ( u );
-	if ( v ) free ( v );
-	if ( u_prev ) free ( u_prev );
-	if ( v_prev ) free ( v_prev );
-	if ( dens ) free ( dens );
-	if ( dens_prev ) free ( dens_prev );
+	if ( h_u ) free ( h_u );
+	if ( h_v ) free ( h_v );
+	if ( h_u_prev ) free ( h_u_prev );
+	if ( h_v_prev ) free ( h_v_prev );
+	if ( h_dens ) free ( h_dens );
+	if ( h_dens_prev ) free ( h_dens_prev );
+  if ( d_u ) cudaFree ( d_u );
+	if ( d_v ) cudaFree ( d_v );
+	if ( d_u_prev ) cudaFree ( d_u_prev );
+	if ( d_v_prev ) cudaFree ( d_v_prev );
+	if ( d_dens ) cudaFree ( d_dens );
+	if ( d_dens_prev ) cudaFree ( d_dens_prev );
 }
 
 static void clear_data ( void )
@@ -58,7 +67,7 @@ static void clear_data ( void )
 	int i, size=(N+2)*(N+2);
 
 	for ( i=0 ; i<size ; i++ ) {
-		u[i] = v[i] = u_prev[i] = v_prev[i] = dens[i] = dens_prev[i] = 0.0f;
+		h_u[i] = h_v[i] = h_u_prev[i] = h_v_prev[i] = h_dens[i] = h_dens_prev[i] = 0.0f;
 	}
 }
 
@@ -66,21 +75,28 @@ static int allocate_data ( void )
 {
 	int size = (N+2)*(N+2);
 
-	// u			= (float *) malloc( size*sizeof(float) );
-	// v			= (float *) malloc( size*sizeof(float) );
-	// u_prev		= (float *) malloc( size*sizeof(float) );
-	// v_prev		= (float *) malloc( size*sizeof(float) );
-	// dens		= (float *) malloc( size*sizeof(float) );
-	// dens_prev	= (float *) malloc( size*sizeof(float) );
+	// h_u			= (float *) malloc( size*sizeof(float) );
+	// h_v			= (float *) malloc( size*sizeof(float) );
+	// h_u_prev		= (float *) malloc( size*sizeof(float) );
+	// h_v_prev		= (float *) malloc( size*sizeof(float) );
+	// h_dens		= (float *) malloc( size*sizeof(float) );
+	// h_dens_prev	= (float *) malloc( size*sizeof(float) );
 
-  assert(posix_memalign((void**)&u, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign((void**)&v, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign((void**)&u_prev, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign((void**)&v_prev, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign((void**)&dens, 32, size*sizeof(float)) == 0);
-  assert(posix_memalign((void**)&dens_prev, 32, size*sizeof(float)) == 0);
+  h_u = malloc(size*sizeof(float));
+  h_v = malloc(size*sizeof(float));
+  h_u_prev = malloc(size*sizeof(float));
+  h_v_prev = malloc(size*sizeof(float));
+  h_dens = malloc(size*sizeof(float));
+  h_dens_prev = malloc(size*sizeof(float));
+  
+  cudaMalloc((void**) &d_u, size*sizeof(float));
+  cudaMalloc((void**) &d_v, size*sizeof(float));
+  cudaMalloc((void**) &d_u_prev, size*sizeof(float));
+  cudaMalloc((void**) &d_v_prev, size*sizeof(float));
+  cudaMalloc((void**) &d_dens, size*sizeof(float));
+  cudaMalloc((void**) &d_dens_prev, size*sizeof(float));
 
-	if ( !u || !v || !u_prev || !v_prev || !dens || !dens_prev ) {
+	if ( !h_u || !h_v || !h_u_prev || !h_v_prev || !h_dens || !h_dens_prev ) {
 		fprintf ( stderr, "cannot allocate data\n" );
 		return ( 0 );
 	}
@@ -90,7 +106,7 @@ static int allocate_data ( void )
 
 
 
-static void react ( float * d, float * u, float * v )
+static void react ( float * d, float * h_u, float * h_v )
 {
 	int i, size = (N+2)*(N+2);
 	float max_velocity2 = 0.0f;
@@ -98,8 +114,8 @@ static void react ( float * d, float * u, float * v )
 
 	max_velocity2 = max_density = 0.0f;
 	for ( i=0 ; i<size ; i++ ) {
-		if (max_velocity2 < u[i]*u[i] + v[i]*v[i]) {
-			max_velocity2 = u[i]*u[i] + v[i]*v[i];
+		if (max_velocity2 < h_u[i]*h_u[i] + h_v[i]*h_v[i]) {
+			max_velocity2 = h_u[i]*h_u[i] + h_v[i]*h_v[i];
 		}
 		if (max_density < d[i]) {
 			max_density = d[i];
@@ -107,12 +123,12 @@ static void react ( float * d, float * u, float * v )
 	}
 
 	for ( i=0 ; i<size ; i++ ) {
-		u[i] = v[i] = d[i] = 0.0f;
+		h_u[i] = h_v[i] = d[i] = 0.0f;
 	}
 
 	if (max_velocity2<0.0000005f) {
-		u[IX(N/2,N/2)] = force * 10.0f;
-		v[IX(N/2,N/2)] = force * 10.0f;
+		h_u[IX(N/2,N/2)] = force * 10.0f;
+		h_v[IX(N/2,N/2)] = force * 10.0f;
 	}
 	if (max_density<1.0f) {
 		d[IX(N/2,N/2)] = source * 10.0f;
@@ -131,15 +147,15 @@ static void one_step ( void )
 	static double dens_ns_p_cell = 0.0;
 
 	start_t = wtime();
-	react ( dens_prev, u_prev, v_prev );
+	react ( h_dens_prev, h_u_prev, h_v_prev );
 	react_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
 	start_t = wtime();
-	vel_step ( N, u, v, u_prev, v_prev, visc, dt );
+	vel_step ( N, h_u, h_v, h_u_prev, h_v_prev, visc, dt );
 	vel_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
 	start_t = wtime();
-	dens_step ( N, dens, dens_prev, u, v, diff, dt );
+	dens_step ( N, h_dens, h_dens_prev, h_u, h_v, diff, dt );
 	dens_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
 	if (1.0<wtime()-one_second) { /* at least 1s between stats */
@@ -155,7 +171,6 @@ static void one_step ( void )
 		times++;
 	}
 }
-
 
 /*
   ----------------------------------------------------------------------
@@ -199,9 +214,24 @@ int main ( int argc, char ** argv )
 
 	if ( !allocate_data () ) exit ( 1 );
 	clear_data ();
-	for (i=0; i<2048; i++)
-		one_step ();
-	free_data ();
+  
+  unsigned int size = (N+2)*(N+2);
+  cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_u, d_u, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+	for (i=0; i<2048; i++) {
+    one_step ();
+    cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_u, h_u, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_u_prev, h_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_v, h_v, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_v_prev, h_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+  }
+  free_data ();
 
 	exit ( 0 );
 }
