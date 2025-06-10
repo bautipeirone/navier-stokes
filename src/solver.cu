@@ -10,8 +10,6 @@
 
 int threadsPerBlock = 1024;
 
-__device__ float * u, * v, * u_prev, * v_prev;
-__device__ float * dens, * dens_prev;
 
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
 typedef enum { RED, BLACK } grid_color;
@@ -81,9 +79,9 @@ __global__ void lin_solve_rb_step(grid_color color,
     unsigned int start = color == RED ? 0 : 1;
     
     // for (unsigned int i = 0; i < ((n+2) / NUM_BLOCKS) ; i++) {
-    // const float* restrict same0_i = same0 + (i * block_size);
-    // const float* restrict neigh_i = neigh + (i * block_size);
-    // float* restrict same_i = same + (i * block_size);             
+    // const float*  same0_i = same0 + (i * block_size);
+    // const float*  neigh_i = neigh + (i * block_size);
+    // float*  same_i = same + (i * block_size);             
 
     int index = idx(x+start,y+1,width);
     same[index] = (same0[index] + a * (neigh[index - width] +
@@ -122,16 +120,16 @@ void diffuse(unsigned int n, boundary b, float * x, const float * x0, float diff
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
 }
 
-float max(float x, float y) {
-  return x < y ? y : x;
-}
+//float max(float x, float y) {
+// return x < y ? y : x;
+//}
 
-float min(float x, float y) {
-  return x < y ? x : y;
-}
+//float min(float x, float y) {
+//  return x < y ? x : y;
+//}
 
 
-__global__ advect_kernel(unsigned int n, boundary b, float* restrict d, float* d0, const float* u, const float* v, float dt) {
+__global__ void advect_kernel(unsigned int n, boundary b, float*  d, float* d0, const float* u, const float* v, float dt) {
   float dt0 = dt * n;
   unsigned int i = blockDim.y * blockIdx.y + threadIdx.y + 1;
   unsigned int j = blockDim.x * blockIdx.x + threadIdx.x + 1;
@@ -156,15 +154,16 @@ __global__ advect_kernel(unsigned int n, boundary b, float* restrict d, float* d
   }
 }
 
-void advect(unsigned int n, boundary b, float* restrict d, float* d0, const float* u, const float* v, float dt)
+void advect(unsigned int n, boundary b, float*  d, float* d0, const float* u, const float* v, float dt)
 {
+  unsigned int numBlocks = (n + 31) / 32;
   dim3 block(32, 32);
   dim3 grid(numBlocks,numBlocks);
   advect_kernel<<<grid, block>>>(n, b, d, d0, u, v, dt);
   set_bnd(n, b, d);
 }
 
-__global__ project_density_kernel(unsigned int n, float *u, float *v, float *p, float *div) {
+__global__ void project_density_kernel(unsigned int n, float *u, float *v, float *p, float *div) {
   unsigned int i = blockDim.y * blockIdx.y + threadIdx.y + 1;
   unsigned int j = blockDim.x * blockIdx.x + threadIdx.x + 1;
   if (i < n+1 && j < n+1) {
@@ -174,7 +173,7 @@ __global__ project_density_kernel(unsigned int n, float *u, float *v, float *p, 
   }
 }
 
-__global__ project_vel_kernel(unsigned int n, float *u, float *v, float *p) {
+__global__ void project_vel_kernel(unsigned int n, float *u, float *v, float *p) {
   unsigned int i = blockDim.y * blockIdx.y + threadIdx.y + 1;
   unsigned int j = blockDim.x * blockIdx.x + threadIdx.x + 1;
   if (i < n+1 && j < n+1) {
@@ -183,7 +182,7 @@ __global__ project_vel_kernel(unsigned int n, float *u, float *v, float *p) {
   }
 }
 
-static void project(unsigned int n, float * restrict u, float * restrict v, float * restrict p, float * restrict div)
+static void project(unsigned int n, float * u, float *  v, float * p, float * div)
 {
         // printf("Thread %d in range [%d,%d), total: %d\n", omp_get_thread_num(), start+1, end+1, n);
     unsigned int numBlocks = (n + 31) / 32;
@@ -201,7 +200,7 @@ static void project(unsigned int n, float * restrict u, float * restrict v, floa
     set_bnd(n, HORIZONTAL, v);
 }
 
-void dens_step(unsigned int n, float *x, float *x0, float *u, float *v, float diff, float dt)
+__host__ void dens_step(unsigned int n, float *x, float *x0, float *u, float *v, float diff, float dt)
 {
     add_source(n, x, x0, dt);
     SWAP(x0, x);
@@ -210,7 +209,7 @@ void dens_step(unsigned int n, float *x, float *x0, float *u, float *v, float di
     advect(n, NONE, x, x0, u, v, dt);
 }
 
-void vel_step(unsigned int n, float *u, float *v, float *u0, float *v0, float visc, float dt)
+__host__ void vel_step(unsigned int n, float *u, float *v, float *u0, float *v0, float visc, float dt)
 {
     add_source(n, u, u0, dt);
     add_source(n, v, v0, dt);
