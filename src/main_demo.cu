@@ -30,6 +30,18 @@
 
 #define IX(x,y) (rb_idx((x),(y),(N+2)))
 
+#ifndef TPB
+#define TPB 1024
+#endif
+
+#ifndef SIDE
+#define SIDE 32
+#endif
+
+#ifndef SIZE
+#define SIZE 1024
+#endif
+
 /* global variables */
 
 static int N;
@@ -161,71 +173,71 @@ static int allocate_data ( void )
 
 static void pre_display ( void )
 {
-	glViewport ( 0, 0, *h_win_x, *h_win_y );
-	glMatrixMode ( GL_PROJECTION );
-	glLoadIdentity ();
-	gluOrtho2D ( 0.0, 1.0, 0.0, 1.0 );
-	glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
-	glClear ( GL_COLOR_BUFFER_BIT );
+        glViewport ( 0, 0, *h_win_x, *h_win_y );
+        glMatrixMode ( GL_PROJECTION );
+        glLoadIdentity ();
+        gluOrtho2D ( 0.0, 1.0, 0.0, 1.0 );
+        glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+        glClear ( GL_COLOR_BUFFER_BIT );
 }
 
 static void post_display ( void )
 {
-	glutSwapBuffers ();
+        glutSwapBuffers ();
 }
 
 static void draw_velocity ( void )
 {
-	int i, j;
-	float x, y, h;
+        int i, j;
+        float x, y, h;
 
-	h = 1.0f/N;
+        h = 1.0f/N;
 
-	glColor3f ( 1.0f, 1.0f, 1.0f );
-	glLineWidth ( 1.0f );
+        glColor3f ( 1.0f, 1.0f, 1.0f );
+        glLineWidth ( 1.0f );
 
-	glBegin ( GL_LINES );
+        glBegin ( GL_LINES );
 
-		for ( i=1 ; i<=N ; i++ ) {
-			x = (i-0.5f)*h;
-			for ( j=1 ; j<=N ; j++ ) {
-				y = (j-0.5f)*h;
+                for ( i=1 ; i<=N ; i++ ) {
+                        x = (i-0.5f)*h;
+                        for ( j=1 ; j<=N ; j++ ) {
+                                y = (j-0.5f)*h;
 
-				glVertex2f ( x, y );
-				glVertex2f ( x+h_u[IX(i,j)], y+h_v[IX(i,j)] );
-			}
-		}
+                                glVertex2f ( x, y );
+                                glVertex2f ( x+h_u[IX(i,j)], y+h_v[IX(i,j)] );
+                        }
+                }
 
-	glEnd ();
+        glEnd ();
 }
 
 static void draw_density ( void )
 {
-	int i, j;
-	float x, y, h, d00, d01, d10, d11;
+        int i, j;
+        float x, y, h, d00, d01, d10, d11;
 
-	h = 1.0f/N;
+        h = 1.0f/N;
 
-	glBegin ( GL_QUADS );
+        glBegin ( GL_QUADS );
 
-		for ( i=0 ; i<=N ; i++ ) {
-			x = (i-0.5f)*h;
-			for ( j=0 ; j<=N ; j++ ) {
-				y = (j-0.5f)*h;
+                for ( i=0 ; i<=N ; i++ ) {
+                        x = (i-0.5f)*h;
+                        for ( j=0 ; j<=N ; j++ ) {
+                                y = (j-0.5f)*h;
 
-				d00 = h_dens[IX(i,j)];
-				d01 = h_dens[IX(i,j+1)];
-				d10 = h_dens[IX(i+1,j)];
-				d11 = h_dens[IX(i+1,j+1)];
+                                d00 = h_dens[IX(i,j)];
+                                d01 = h_dens[IX(i,j+1)];
+                                d10 = h_dens[IX(i+1,j)];
+                                d11 = h_dens[IX(i+1,j+1)];
 
-				glColor3f ( d00, d00, d00 ); glVertex2f ( x, y );
-				glColor3f ( d10, d10, d10 ); glVertex2f ( x+h, y );
-				glColor3f ( d11, d11, d11 ); glVertex2f ( x+h, y+h );
-				glColor3f ( d01, d01, d01 ); glVertex2f ( x, y+h );
-			}
-		}
+                                glColor3f ( d00, d00, d00 ); glVertex2f ( x, y );
+                                glColor3f ( d10, d10, d10 ); glVertex2f ( x+h, y );
+                                glColor3f ( d11, d11, d11 ); glVertex2f ( x+h, y+h );
+                                glColor3f ( d01, d01, d01 ); glVertex2f ( x, y+h );
+                        }
+                }
 
-	glEnd ();
+        glEnd ();
 }
 
 /*
@@ -234,9 +246,9 @@ static void draw_density ( void )
   ----------------------------------------------------------------------
 */
 
-__host__ void react(float * d, float * h_u, float * v, int n, 
-	float *d_force, float *d_source, int *d_mouse_down,
-	int *d_mx, int *d_my, int *d_omx, int *d_omy, int *d_win_x, int *d_win_y);
+__host__ void react(float * d, float * h_u, float * v, int n,
+        float *d_force, float *d_source, int *d_mouse_down,
+        int *d_mx, int *d_my, int *d_omx, int *d_omy, int *d_win_x, int *d_win_y);
 
 /*
   ---------------------------------------------------------------------
@@ -246,76 +258,77 @@ __host__ void react(float * d, float * h_u, float * v, int n,
 
 static void key_func ( unsigned char key, int x, int y )
 {
-	switch ( key )
-	{
-		case 'c':
-		case 'C':
-			clear_data ();
-			break;
+        switch ( key )
+        {
+                case 'c':
+                case 'C':
+                        clear_data ();
+                        break;
 
-		case 'q':
-		case 'Q':
-			free_data ();
-			exit ( 0 );
-			break;
+                case 'q':
+                case 'Q':
+                        free_data ();
+                        exit ( 0 );
+                        break;
 
-		case 'v':
-		case 'V':
-			dvel = !dvel;
-			break;
-	}
+                case 'v':
+                case 'V':
+                        dvel = !dvel;
+                        break;
+        }
 }
 
 static void mouse_func ( int button, int state, int x, int y )
 {
-	*h_omx = *h_mx = x;
-	*h_omy = *h_my = y;
+        *h_omx = *h_mx = x;
+        *h_omy = *h_my = y;
 
-	h_mouse_down[button] = state == GLUT_DOWN;
+        h_mouse_down[button] = state == GLUT_DOWN;
 }
 
 static void motion_func ( int x, int y )
 {
-	*h_mx = x;
-	*h_my = y;
+        *h_mx = x;
+        *h_my = y;
 }
 
 static void reshape_func ( int width, int height )
 {
-	glutSetWindow ( h_win_id );
-	glutReshapeWindow ( width, height );
+        glutSetWindow ( h_win_id );
+        glutReshapeWindow ( width, height );
 
-	*h_win_x = width;
-	*h_win_y = height;
+        *h_win_x = width;
+        *h_win_y = height;
 }
 
 __host__ void idle_func ( void )
 {
-	static int times = 1;
-	static double start_t = 0.0;
-	static double one_second = 0.0;
-	static double react_ns_p_cell = 0.0;
-	static double vel_ns_p_cell = 0.0;
-	static double dens_ns_p_cell = 0.0;
-	unsigned int size = (N+2)*(N+2);
-  
-	start_t = wtime();
-	react (d_dens_prev, d_u_prev, d_v_prev, N, d_force, d_source, d_mouse_down,
-		d_mx, d_my, d_omx, d_omy, d_win_x, d_win_y);
-	react_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
+        static int times = 1;
+        static double start_t = 0.0;
+        static double one_second = 0.0;
+        static double react_ns_p_cell = 0.0;
+        static double vel_ns_p_cell = 0.0;
+        static double dens_ns_p_cell = 0.0;
+        unsigned int size = (N+2)*(N+2);
+
+        start_t = wtime();
+        react (d_dens_prev, d_u_prev, d_v_prev, N, d_force, d_source, d_mouse_down,
+                d_mx, d_my, d_omx, d_omy, d_win_x, d_win_y);
+        react_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
 
-	start_t = wtime();
-	vel_step ( N, d_u, d_v, d_u_prev, d_v_prev, visc, dt );
-	vel_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
+        start_t = wtime();
+        vel_step ( N, d_u, d_v, d_u_prev, d_v_prev, visc, dt );
+        vel_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
-	start_t = wtime();
-	dens_step ( N, d_dens, d_dens_prev, d_u, d_v, diff, dt );
-	dens_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
-  
-  cudaMemcpy(h_dens,d_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_dens_prev,d_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_u,d_u, size * sizeof(float), cudaMemcpyDeviceToHost);
+        start_t = wtime();
+        dens_step ( N, d_dens, d_dens_prev, d_u, d_v, diff, dt );
+        dens_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
+
+       cudaDeviceSynchronize();
+       cudaMemcpy(h_dens,d_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
+       cudaMemcpy(h_dens_prev,d_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+       cudaMemcpy(h_u,d_u, size * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_u_prev,d_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_v,d_v, size * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_v_prev,d_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
@@ -329,30 +342,30 @@ __host__ void idle_func ( void )
   cudaMemcpy(h_force,d_force,sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_source,d_source,sizeof(float), cudaMemcpyDeviceToHost);
 
-	if (1.0<wtime()-one_second) { /* at least 1s between stats */
-		printf("%lf, %lf, %lf, %lf: ns per cell total, react, vel_step, dens_step\n",
-			(react_ns_p_cell+vel_ns_p_cell+dens_ns_p_cell)/times,
-			react_ns_p_cell/times, vel_ns_p_cell/times, dens_ns_p_cell/times);
-		one_second = wtime();
-		react_ns_p_cell = 0.0;
-		vel_ns_p_cell = 0.0;
-		dens_ns_p_cell = 0.0;
-		times = 1;
-	} else {
-		times++;
-	}
-	glutSetWindow ( h_win_id );
-	glutPostRedisplay ();
+        if (1.0<wtime()-one_second) { /* at least 1s between stats */
+                printf("%lf, %lf, %lf, %lf: ns per cell total, react, vel_step, dens_step\n",
+                        (react_ns_p_cell+vel_ns_p_cell+dens_ns_p_cell)/times,
+                        react_ns_p_cell/times, vel_ns_p_cell/times, dens_ns_p_cell/times);
+                one_second = wtime();
+                react_ns_p_cell = 0.0;
+                vel_ns_p_cell = 0.0;
+                dens_ns_p_cell = 0.0;
+                times = 1;
+        } else {
+                times++;
+        }
+        glutSetWindow ( h_win_id );
+        glutPostRedisplay ();
 }
 
 static void display_func ( void )
 {
-	pre_display ();
+        pre_display ();
 
-		if ( dvel ) draw_velocity ();
-		else		draw_density ();
+                if ( dvel ) draw_velocity ();
+                else            draw_density ();
 
-	post_display ();
+        post_display ();
 }
 
 
@@ -364,31 +377,31 @@ static void display_func ( void )
 
 static void open_glut_window ( void )
 {
-	glutInitDisplayMode ( GLUT_RGBA | GLUT_DOUBLE );
+        glutInitDisplayMode ( GLUT_RGBA | GLUT_DOUBLE );
 
-	glutInitWindowPosition ( 0, 0 );
-	glutInitWindowSize ( *h_win_x, *h_win_y );
-	h_win_id = glutCreateWindow ( "Alias | wavefront" );
+        glutInitWindowPosition ( 0, 0 );
+        glutInitWindowSize ( *h_win_x, *h_win_y );
+        h_win_id = glutCreateWindow ( "Alias | wavefront" );
 
-	glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
-	glClear ( GL_COLOR_BUFFER_BIT );
-	glutSwapBuffers ();
-	glClear ( GL_COLOR_BUFFER_BIT );
-	glutSwapBuffers ();
+        glClearColor ( 0.0f, 0.0f, 0.0f, 1.0f );
+        glClear ( GL_COLOR_BUFFER_BIT );
+        glutSwapBuffers ();
+        glClear ( GL_COLOR_BUFFER_BIT );
+        glutSwapBuffers ();
 
-	pre_display ();
+        pre_display ();
 
-	glutKeyboardFunc ( key_func );
-	glutMouseFunc ( mouse_func );
-	glutMotionFunc ( motion_func );
-	glutReshapeFunc ( reshape_func );
+        glutKeyboardFunc ( key_func );
+        glutMouseFunc ( mouse_func );
+        glutMotionFunc ( motion_func );
+        glutReshapeFunc ( reshape_func );
 
-	int i  =0 ;
-	unsigned int size = (N+2)*(N+2);
+        int i  =0 ;
+        unsigned int size = (N+2)*(N+2);
 
-	
+
   glutIdleFunc( idle_func );
-	glutDisplayFunc ( display_func );
+        glutDisplayFunc ( display_func );
 }
 
 
@@ -400,58 +413,58 @@ static void open_glut_window ( void )
 
 int main ( int argc, char ** argv )
 {
-	glutInit ( &argc, argv );
+        glutInit ( &argc, argv );
 
-	if ( argc != 1 && argc != 7 ) {
-		fprintf ( stderr, "usage : %s N dt diff visc h_force *h_source\n", argv[0] );
-		fprintf ( stderr, "where:\n" );\
-		fprintf ( stderr, "\t N      : grid resolution\n" );
-		fprintf ( stderr, "\t dt     : time step\n" );
-		fprintf ( stderr, "\t diff   : diffusion rate of the density\n" );
-		fprintf ( stderr, "\t visc   : viscosity of the fluid\n" );
-		fprintf ( stderr, "\t h_force  : scales the mouse movement that generate a h_force\n" );
-		fprintf ( stderr, "\t *h_source : amount of density that will be deposited\n" );
-		exit ( 1 );
-	}
+        if ( argc != 1 && argc != 7 ) {
+                fprintf ( stderr, "usage : %s N dt diff visc h_force *h_source\n", argv[0] );
+                fprintf ( stderr, "where:\n" );\
+                fprintf ( stderr, "\t N      : grid resolution\n" );
+                fprintf ( stderr, "\t dt     : time step\n" );
+                fprintf ( stderr, "\t diff   : diffusion rate of the density\n" );
+                fprintf ( stderr, "\t visc   : viscosity of the fluid\n" );
+                fprintf ( stderr, "\t h_force  : scales the mouse movement that generate a h_force\n" );
+                fprintf ( stderr, "\t *h_source : amount of density that will be deposited\n" );
+                exit ( 1 );
+        }
   float aux_force;
   float aux_source;
-	if ( argc == 1 ) {
-    N = 1024;
-		dt = 0.1f;
-		diff = 0.0f;
-		visc = 0.0f;
-		aux_force = 5.0f;
-		aux_source = 100.0f;
-		fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
-			N, dt, diff, visc, aux_force, aux_source );
-	} else {
-		N = atoi(argv[1]);
-		dt = atof(argv[2]);
-		diff = atof(argv[3]);
-		visc = atof(argv[4]);
-		aux_force = atof(argv[5]);
-		aux_source = atof(argv[6]);
-	}
+        if ( argc == 1 ) {
+                N = SIZE;
+                dt = 0.1f;
+                diff = 0.0f;
+                visc = 0.0f;
+                aux_force = 5.0f;
+                aux_source = 100.0f;
+                fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
+                        N, dt, diff, visc, aux_force, aux_source );
+        } else {
+                N = atoi(argv[1]);
+                dt = atof(argv[2]);
+                diff = atof(argv[3]);
+                visc = atof(argv[4]);
+                aux_force = atof(argv[5]);
+                aux_source = atof(argv[6]);
+        }
 
-	printf ( "\n\nHow to use this demo:\n\n" );
-	printf ( "\t Add densities with the right mouse button\n" );
-	printf ( "\t Add velocities with the left mouse button and dragging the mouse\n" );
-	printf ( "\t Toggle density/velocity display with the 'v' key\n" );
-	printf ( "\t Clear the simulation by pressing the 'c' key\n" );
-	printf ( "\t Quit by pressing the 'q' key\n" );
+        printf ( "\n\nHow to use this demo:\n\n" );
+        printf ( "\t Add densities with the right mouse button\n" );
+        printf ( "\t Add velocities with the left mouse button and dragging the mouse\n" );
+        printf ( "\t Toggle density/velocity display with the 'v' key\n" );
+        printf ( "\t Clear the simulation by pressing the 'c' key\n" );
+        printf ( "\t Quit by pressing the 'q' key\n" );
 
-	dvel = 0;
+        dvel = 0;
 
-	if ( !allocate_data () ) exit ( 1 );
-	clear_data ();
+        if ( !allocate_data () ) exit ( 1 );
+        clear_data ();
 
   *h_force = aux_force;
   *h_source = aux_source;
-	*h_win_x = 512;
-	*h_win_y = 512;
-	open_glut_window ();
+        *h_win_x = 512;
+        *h_win_y = 512;
+        open_glut_window ();
 
-	unsigned int size = (N+2)*(N+2);
+        unsigned int size = (N+2)*(N+2);
   cudaMemcpy(d_dens,h_dens, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_dens_prev,h_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_u,h_u, size * sizeof(float), cudaMemcpyHostToDevice);
@@ -467,9 +480,9 @@ int main ( int argc, char ** argv )
   cudaMemcpy(d_my,h_my,sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_force,h_force,sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
-	glutMainLoop ();
+        glutMainLoop ();
 
-	exit ( 0 );
+        exit ( 0 );
 }
 
 //
@@ -486,7 +499,7 @@ double wtime(void)
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 
-int threadsPerBlock = 1024;
+int threadsPerBlock = TPB;
 
 
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
@@ -508,15 +521,28 @@ static void add_source(unsigned int n, float *x, const float *s, float dt)
 
   // Check if the number of blocks exceeds the maximum allowed
   int maxBlocks = 65535; // Maximum number of blocks (adjust if needed)
-  while (numBlocks > maxBlocks) {
-    add_source_kernel<<<maxBlocks, threadsPerBlock>>>(n, x, s, dt);
-    cudaDeviceSynchronize();
-    x += maxBlocks * threadsPerBlock;
-    s += maxBlocks * threadsPerBlock;
-    numBlocks -= maxBlocks;
+  //while (numBlocks > maxBlocks) {
+  dim3 block(threadsPerBlock,1);
+  dim3 grid(numBlocks,1);
+  add_source_kernel<<<grid, block>>>(n, x, s, dt);
+  cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("add_source_kernel 1 launch failed: %s\n", cudaGetErrorString(err));
   }
-  add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
-  cudaDeviceSynchronize();
+
+//     cudaDeviceSynchronize();
+//    x += maxBlocks * threadsPerBlock;
+//    s += maxBlocks * threadsPerBlock;
+//    numBlocks -= maxBlocks;
+//  }
+//  add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
+//  cudaError_t err = cudaGetLastError();
+//      if (err != cudaSuccess) {
+//        printf("add_source_kernel 2 launch failed: %s\n", cudaGetErrorString(err));
+//    }
+
+//   cudaDeviceSynchronize();
+
 
 }
 
@@ -542,7 +568,12 @@ static void set_bnd(unsigned int n, boundary b, float* x)
 {
     int numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
     set_bnd_kernel<<<numBlocks, threadsPerBlock>>>(n, b, x);
-    cudaDeviceSynchronize();
+    cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("set_bnd_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
+//     cudaDeviceSynchronize();
 }
 
 __global__ void lin_solve_rb_step(grid_color color,
@@ -554,10 +585,12 @@ __global__ void lin_solve_rb_step(grid_color color,
   float * same)
   {
     unsigned int width = (n + 2) / 2;
-    unsigned int block_size = 1024 / n;
+    unsigned int block_size = TPB / n;
 
-    unsigned y = blockIdx.y;
+    unsigned y = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
+
+
 
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
@@ -585,16 +618,30 @@ void lin_solve(unsigned int n, boundary b,
     const float * blk0 = x0 + color_size;
     float * red = x;
     float * blk = x + color_size;
-    
-    unsigned int blocksPerRow = (((n / 2) + 1023) / 1024);
-    dim3 grid(blocksPerRow, n);
-    dim3 block(1024, 1);
+
+    unsigned int threadsPerRow = n/2 < TPB ? n/2 : TPB;
+    unsigned int blocksPerRow = (((n / 2) + (threadsPerRow-1)) / threadsPerRow);
+    unsigned int height = 1024/threadsPerRow;
+    int rows = (n/height);
+    //dim3 grid(1, rows);
+    dim3 block(TPB, height);
+    dim3 grid(blocksPerRow, rows);
     for (unsigned int k = 0; k < 20; ++k) {
       // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
       lin_solve_rb_step<<<grid, block>>>(RED, n, a, c, red0, blk, red);
+      cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("lin_solve_rb_step_kernel 1 launch failed: %s\n", cudaGetErrorString(err));
+       }
+
       // cudaMemcpyToSymbol(ro_mem, blk0, threadsPerBlock * sizeof(float));
       lin_solve_rb_step<<<grid, block>>>(BLACK, n, a, c, blk0, red, blk);
-      cudaDeviceSynchronize();
+      err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("lin_solve_rb_step_kernel 2 launch failed: %s\n", cudaGetErrorString(err));
+       }
+
+//       cudaDeviceSynchronize();
       set_bnd(n, b, x);
     }
   }
@@ -641,11 +688,15 @@ __global__ void advect_kernel(unsigned int n, boundary b, float*  d, float* d0, 
 
 void advect(unsigned int n, boundary b, float*  d, float* d0, const float* u, const float* v, float dt)
 {
-  unsigned int numBlocks = (n + 31) / 32;
-  dim3 block(32, 32);
+  unsigned int numBlocks = (n + (SIDE-1)) / SIDE;
+  dim3 block(SIDE,SIDE);
   dim3 grid(numBlocks,numBlocks);
   advect_kernel<<<grid, block>>>(n, b, d, d0, u, v, dt);
-  cudaDeviceSynchronize();
+  cudaError_t err = cudaGetLastError();
+     if (err != cudaSuccess) {
+     printf("react_kernel launch failed: %s\n", cudaGetErrorString(err));
+  }
+ // cudaDeviceSynchronize();
   set_bnd(n, b, d);
 }
 
@@ -671,18 +722,27 @@ __global__ void project_vel_kernel(unsigned int n, float *u, float *v, float *p)
 static void project(unsigned int n, float * u, float *  v, float * p, float * div)
 {
         // printf("Thread %d in range [%d,%d), total: %d\n", omp_get_thread_num(), start+1, end+1, n);
-    unsigned int numBlocks = (n + 31) / 32;
-    dim3 block(32, 32);
+    unsigned int numBlocks = (n + (SIDE-1)) / SIDE;
+    dim3 block(SIDE, SIDE);
     dim3 grid(numBlocks,numBlocks);
     project_density_kernel<<<grid,block>>>(n, u, v, p, div);
-    cudaDeviceSynchronize();
+    cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("project_density_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
     set_bnd(n, NONE, div);
     set_bnd(n, NONE, p);
 
     lin_solve(n, NONE, p, div, 1, 4);
 
     project_vel_kernel<<<grid, block>>>(n, u, v, p);
-    cudaDeviceSynchronize();
+    err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("project_vel_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
+//     cudaDeviceSynchronize();
     set_bnd(n, VERTICAL, u);
     set_bnd(n, HORIZONTAL, v);
 }
@@ -707,15 +767,17 @@ __host__ void vel_step(unsigned int n, float *u, float *v, float *u0, float *v0,
   project(n, u, v, u0, v0);
   SWAP(u0, u);
   SWAP(v0, v);
-    advect(n, VERTICAL, u, u0, u0, v0, dt);
-    advect(n, HORIZONTAL, v, v0, u0, v0, dt);
-    project(n, u, v, u0, v0);
+  advect(n, VERTICAL, u, u0, u0, v0, dt);
+  advect(n, HORIZONTAL, v, v0, u0, v0, dt);
+  project(n, u, v, u0, v0);
 }
 
-__global__ void react_kernel(float * d, float * h_u, float * v, int n, 
+__global__ void react_kernel(float * d, float * h_u, float * v, int n,
     float *d_force, float *d_source, int *d_mouse_down,
     int *d_mx, int *d_my, int *d_omx, int *d_omy, int *d_win_x, int *d_win_y)
 {
+
+
     if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
         float max_velocity2 = 0.0f;
         float max_density = 0.0f;
@@ -761,14 +823,18 @@ __global__ void react_kernel(float * d, float * h_u, float * v, int n,
 }
 
 
-void react(float * d, float * u, float * v, int n, 
-	float *d_force, float *d_source, int *d_mouse_down,
-	int *d_mx, int *d_my, int *d_omx, int *d_omy, int *d_win_x, int *d_win_y){
-	unsigned int numBlocks = (N + 31) / 32;
-  	dim3 block(32, 32);
-  	dim3 grid(numBlocks,numBlocks);
-  	react_kernel<<<grid, block>>>(d, u, v, n, d_force, d_source, d_mouse_down,
-		d_mx, d_my, d_omx, d_omy, d_win_x, d_win_y);
-    cudaDeviceSynchronize();
+void react(float * d, float * u, float * v, int n,
+        float *d_force, float *d_source, int *d_mouse_down,
+        int *d_mx, int *d_my, int *d_omx, int *d_omy, int *d_win_x, int *d_win_y){
+        unsigned int numBlocks = (N + (SIDE-1)) / (SIDE);
+        dim3 block(SIDE,SIDE);
+        dim3 grid(numBlocks,numBlocks);
+        react_kernel<<<grid, block>>>(d, u, v, n, d_force, d_source, d_mouse_down,
+                d_mx, d_my, d_omx, d_omy, d_win_x, d_win_y);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+         printf("react_kernel launch failed: %s\n", cudaGetErrorString(err));
+        }
+//      cudaDeviceSynchronize();
 
 }
