@@ -146,11 +146,11 @@ static void one_step ( void )
         react_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
         start_t = wtime();
-        vel_step ( N, h_u, h_v, h_u_prev, h_v_prev, visc, dt );
+        vel_step ( N, d_u, d_v, d_u_prev, d_v_prev, visc, dt );
         vel_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
         start_t = wtime();
-        dens_step ( N, h_dens, h_dens_prev, h_u, h_v, diff, dt );
+        dens_step ( N, d_dens, d_dens_prev, d_u, d_v, diff, dt );
         dens_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
         if (1.0<wtime()-one_second) { /* at least 1s between stats */
@@ -305,7 +305,7 @@ void lin_solve(unsigned int n, boundary b,
     unsigned int height = 1024/threadsPerRow;
     int rows = (n/height);
     //dim3 grid(1, rows);
-    dim3 block(TPB, height);
+    dim3 block(threadsPerRow, height);
     dim3 grid(blocksPerRow, rows);
     for (unsigned int k = 0; k < 20; ++k) {
       // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
@@ -568,22 +568,22 @@ int main ( int argc, char ** argv )
   *h_source = source;
   *h_force = force;
   unsigned int size = (N+2)*(N+2);
-  cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_u, d_u, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_u, h_u, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_u_prev, h_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_v, h_v, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_v_prev, h_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_force, h_force,sizeof(float), cudaMemcpyHostToDevice);
   for (i=0; i<2048; i++) {
     one_step ();
-    cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_u, h_u, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_u_prev, h_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_v, h_v, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_v_prev, h_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_u, d_u, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
   }
   free_data ();
 
