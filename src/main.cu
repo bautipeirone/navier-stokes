@@ -167,74 +167,6 @@ static void one_step ( void )
         }
 }
 
-/*
-  ----------------------------------------------------------------------
-   main --- main routine
-  ----------------------------------------------------------------------
-*/
-
-int main ( int argc, char ** argv )
-{
-        int i = 0;
-
-        if ( argc > 2 && argc != 7 ) {
-                fprintf ( stderr, "usage : %s N dt diff visc force source\n", argv[0] );
-                fprintf ( stderr, "where:\n" );\
-                fprintf ( stderr, "\t N      : grid resolution\n" );
-                fprintf ( stderr, "\t dt     : time step\n" );
-                fprintf ( stderr, "\t diff   : diffusion rate of the density\n" );
-                fprintf ( stderr, "\t visc   : viscosity of the fluid\n" );
-                fprintf ( stderr, "\t force  : scales the mouse movement that generate a force\n" );
-                fprintf ( stderr, "\t source : amount of density that will be deposited\n" );
-                exit ( 1 );
-        }
-
-        if ( argc <= 2 ) {
-                N = argc == 2 ? atoi(argv[1]) : 64;
-                dt = 0.1f;
-                diff = 0.0f;
-                visc = 0.0f;
-                force = 5.0f;
-                source = 100.0f;
-                fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
-                        N, dt, diff, visc, force, source );
-        } else {
-                N = atoi(argv[1]);
-                dt = atof(argv[2]);
-                diff = atof(argv[3]);
-                visc = atof(argv[4]);
-                force = atof(argv[5]);
-                source = atof(argv[6]);
-        }
-
-        if ( !allocate_data () ) exit ( 1 );
-        clear_data ();
-      
-  *h_source = source;
-  *h_force = force;
-  unsigned int size = (N+2)*(N+2);
-  cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_u, d_u, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
-  for (i=0; i<2048; i++) {
-    one_step ();
-    cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_u, h_u, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_u_prev, h_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_v, h_v, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(d_v_prev, h_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-  }
-  free_data ();
-
-        exit ( 0 );
-}
-
 //
 // timing.c
 //
@@ -588,4 +520,72 @@ void react(float * d, float * u, float * v, int n,
         }
 //      cudaDeviceSynchronize();
 
+}
+
+/*
+  ----------------------------------------------------------------------
+   main --- main routine
+  ----------------------------------------------------------------------
+*/
+
+int main ( int argc, char ** argv )
+{
+        int i = 0;
+
+        if ( argc > 2 && argc != 7 ) {
+                fprintf ( stderr, "usage : %s N dt diff visc force source\n", argv[0] );
+                fprintf ( stderr, "where:\n" );\
+                fprintf ( stderr, "\t N      : grid resolution\n" );
+                fprintf ( stderr, "\t dt     : time step\n" );
+                fprintf ( stderr, "\t diff   : diffusion rate of the density\n" );
+                fprintf ( stderr, "\t visc   : viscosity of the fluid\n" );
+                fprintf ( stderr, "\t force  : scales the mouse movement that generate a force\n" );
+                fprintf ( stderr, "\t source : amount of density that will be deposited\n" );
+                exit ( 1 );
+        }
+
+        if ( argc <= 2 ) {
+                N = argc == 2 ? atoi(argv[1]) : 64;
+                dt = 0.1f;
+                diff = 0.0f;
+                visc = 0.0f;
+                force = 5.0f;
+                source = 100.0f;
+                fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
+                        N, dt, diff, visc, force, source );
+        } else {
+                N = atoi(argv[1]);
+                dt = atof(argv[2]);
+                diff = atof(argv[3]);
+                visc = atof(argv[4]);
+                force = atof(argv[5]);
+                source = atof(argv[6]);
+        }
+
+        if ( !allocate_data () ) exit ( 1 );
+        clear_data ();
+      
+  *h_source = source;
+  *h_force = force;
+  unsigned int size = (N+2)*(N+2);
+  cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_u, d_u, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
+  for (i=0; i<2048; i++) {
+    one_step ();
+    cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_u, h_u, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_u_prev, h_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_v, h_v, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_v_prev, h_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
+  }
+  free_data ();
+
+        exit ( 0 );
 }
