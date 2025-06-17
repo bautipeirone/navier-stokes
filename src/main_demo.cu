@@ -624,7 +624,7 @@ void lin_solve(unsigned int n, boundary b,
     unsigned int height = 1024/threadsPerRow;
     int rows = (n/height);
     //dim3 grid(1, rows);
-    dim3 block(TPB, height);
+    dim3 block(threadsPerRow, height);
     dim3 grid(blocksPerRow, rows);
     for (unsigned int k = 0; k < 20; ++k) {
       // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
