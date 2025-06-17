@@ -29,6 +29,19 @@
 
 #define IX(x,y) (rb_idx((x),(y),(N+2)))
 
+#ifndef TPB
+#define TPB 1024
+#endif
+
+#ifndef SIDE
+#define SIDE 32
+#endif
+
+#ifndef SIZE
+#define SIZE 1024
+#endif
+
+
 /* global variables */
 
 static int N;
@@ -118,37 +131,6 @@ static int allocate_data ( void )
 }
 
 
-
-static void react ( float * d, float * h_u, float * h_v )
-{
-        int i, size = (N+2)*(N+2);
-        float max_velocity2 = 0.0f;
-        float max_density = 0.0f;
-
-        max_velocity2 = max_density = 0.0f;
-        for ( i=0 ; i<size ; i++ ) {
-                if (max_velocity2 < h_u[i]*h_u[i] + h_v[i]*h_v[i]) {
-                        max_velocity2 = h_u[i]*h_u[i] + h_v[i]*h_v[i];
-                }
-                if (max_density < d[i]) {
-                        max_density = d[i];
-                }
-        }
-
-        for ( i=0 ; i<size ; i++ ) {
-                h_u[i] = h_v[i] = d[i] = 0.0f;
-        }
-
-        if (max_velocity2<0.0000005f) {
-                h_u[IX(N/2,N/2)] = force * 10.0f;
-                h_v[IX(N/2,N/2)] = force * 10.0f;
-        }
-        if (max_density<1.0f) {
-                d[IX(N/2,N/2)] = source * 10.0f;
-        }
-
-        return;
-}
 
 static void one_step ( void )
 {
