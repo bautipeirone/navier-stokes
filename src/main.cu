@@ -37,9 +37,11 @@ static float force, source;
 
 static float * h_u, * h_v, * h_u_prev, * h_v_prev;
 static float * h_dens, * h_dens_prev;
+static float * h_source, * h_force;
 
 float * d_u, * d_v, * d_u_prev, * d_v_prev;
 float * d_dens, * d_dens_prev;
+float * d_source, * d_force;
 
 /*
   ----------------------------------------------------------------------
@@ -56,12 +58,17 @@ static void free_data ( void )
         if ( h_v_prev ) free ( h_v_prev );
         if ( h_dens ) free ( h_dens );
         if ( h_dens_prev ) free ( h_dens_prev );
-  if ( d_u ) cudaFree ( d_u );
+        if ( h_source ) free ( h_source );
+        if ( h_force ) free ( h_force );
+        
+        if ( d_u ) cudaFree ( d_u );
         if ( d_v ) cudaFree ( d_v );
         if ( d_u_prev ) cudaFree ( d_u_prev );
         if ( d_v_prev ) cudaFree ( d_v_prev );
         if ( d_dens ) cudaFree ( d_dens );
         if ( d_dens_prev ) cudaFree ( d_dens_prev );
+        if ( d_source ) free ( d_source );
+        if ( d_force ) free ( d_force );
 }
 
 static void clear_data ( void )
@@ -90,6 +97,8 @@ static int allocate_data ( void )
   h_v_prev = (float*) malloc(size*sizeof(float));
   h_dens = (float*) malloc(size*sizeof(float));
   h_dens_prev = (float*) malloc(size*sizeof(float));
+  h_source = (float*) malloc(sizeof(float));
+  h_force = (float*) malloc(sizeof(float));
 
   cudaMalloc((void**) &d_u, size*sizeof(float));
   cudaMalloc((void**) &d_v, size*sizeof(float));
@@ -97,6 +106,8 @@ static int allocate_data ( void )
   cudaMalloc((void**) &d_v_prev, size*sizeof(float));
   cudaMalloc((void**) &d_dens, size*sizeof(float));
   cudaMalloc((void**) &d_dens_prev, size*sizeof(float));
+  cudaMalloc((void**) &d_force,sizeof(float));
+  cudaMalloc((void**) &d_source,sizeof(float));
 
         if ( !h_u || !h_v || !h_u_prev || !h_v_prev || !h_dens || !h_dens_prev ) {
                 fprintf ( stderr, "cannot allocate data\n" );
@@ -149,7 +160,7 @@ static void one_step ( void )
         static double dens_ns_p_cell = 0.0;
 
         start_t = wtime();
-        react ( h_dens_prev, h_u_prev, h_v_prev );
+        react ( d_dens_prev, d_u_prev, d_v_prev, N, d_force, d_source);
         react_ns_p_cell += 1.0e9 * (wtime()-start_t)/(N*N);
 
         start_t = wtime();
@@ -216,7 +227,9 @@ int main ( int argc, char ** argv )
 
         if ( !allocate_data () ) exit ( 1 );
         clear_data ();
-
+      
+  *h_source = source;
+  *h_force = force;
   unsigned int size = (N+2)*(N+2);
   cudaMemcpy(h_dens, d_dens, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(h_dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
@@ -224,7 +237,9 @@ int main ( int argc, char ** argv )
   cudaMemcpy(h_u_prev, d_u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(h_v, d_v, size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(h_v_prev, d_v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-        for (i=0; i<2048; i++) {
+  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_source,h_source,sizeof(float), cudaMemcpyHostToDevice);
+  for (i=0; i<2048; i++) {
     one_step ();
     cudaMemcpy(d_dens, h_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(d_dens_prev, h_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
@@ -237,6 +252,7 @@ int main ( int argc, char ** argv )
 
         exit ( 0 );
 }
+
 //
 // timing.c
 //
@@ -251,7 +267,7 @@ double wtime(void)
 #define IX(x,y) (rb_idx((x),(y),(n+2)))
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 
-int threadsPerBlock = 1024;
+int threadsPerBlock = TPB;
 
 
 typedef enum { NONE = 0, VERTICAL = 1, HORIZONTAL = 2 } boundary;
@@ -273,13 +289,29 @@ static void add_source(unsigned int n, float *x, const float *s, float dt)
 
   // Check if the number of blocks exceeds the maximum allowed
   int maxBlocks = 65535; // Maximum number of blocks (adjust if needed)
-  while (numBlocks > maxBlocks) {
-    add_source_kernel<<<maxBlocks, threadsPerBlock>>>(n, x, s, dt);
-    x += maxBlocks * threadsPerBlock;
-    s += maxBlocks * threadsPerBlock;
-    numBlocks -= maxBlocks;
+  //while (numBlocks > maxBlocks) {
+  dim3 block(threadsPerBlock,1);
+  dim3 grid(numBlocks,1);
+  add_source_kernel<<<grid, block>>>(n, x, s, dt);
+  cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("add_source_kernel 1 launch failed: %s\n", cudaGetErrorString(err));
   }
-  add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
+
+//     cudaDeviceSynchronize();
+//    x += maxBlocks * threadsPerBlock;
+//    s += maxBlocks * threadsPerBlock;
+//    numBlocks -= maxBlocks;
+//  }
+//  add_source_kernel<<<numBlocks, threadsPerBlock>>>(n, x, s, dt);
+//  cudaError_t err = cudaGetLastError();
+//      if (err != cudaSuccess) {
+//        printf("add_source_kernel 2 launch failed: %s\n", cudaGetErrorString(err));
+//    }
+
+//   cudaDeviceSynchronize();
+
+
 }
 
 __global__ void set_bnd_kernel(unsigned int n, boundary b, float* x)
@@ -292,16 +324,24 @@ __global__ void set_bnd_kernel(unsigned int n, boundary b, float* x)
     x[IX(i, 0)]     = (b == HORIZONTAL) ? -x[IX(i, 1)] : x[IX(i, 1)];
     x[IX(i, n + 1)] = (b == HORIZONTAL) ? -x[IX(i, n)] : x[IX(i, n)];
   }
+  if(i == 0){
+    x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
+    x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
+    x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
+    x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
+  }
 }
 
 static void set_bnd(unsigned int n, boundary b, float* x)
 {
     int numBlocks = (n + threadsPerBlock - 1) / threadsPerBlock;
     set_bnd_kernel<<<numBlocks, threadsPerBlock>>>(n, b, x);
-    x[IX(0, 0)] = 0.5f * (x[IX(1, 0)] + x[IX(0, 1)]);
-    x[IX(n + 1, 0)] = 0.5f * (x[IX(n, 0)] + x[IX(n + 1, 1)]);
-    x[IX(0, n + 1)] = 0.5f * (x[IX(1, n + 1)] + x[IX(0, n)]);
-    x[IX(n + 1, n + 1)] = 0.5f * (x[IX(n, n + 1)] + x[IX(n + 1, n)]);
+    cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("set_bnd_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
+//     cudaDeviceSynchronize();
 }
 
 __global__ void lin_solve_rb_step(grid_color color,
@@ -313,10 +353,11 @@ __global__ void lin_solve_rb_step(grid_color color,
   float * same)
   {
     unsigned int width = (n + 2) / 2;
-    unsigned int block_size = 1024 / n;
+    unsigned int block_size = TPB / n;
 
-    unsigned y = blockIdx.y;
+    unsigned y = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned x = blockIdx.x * blockDim.x + threadIdx.x;
+
 
     int shift = color == RED ? 1 : -1;
     unsigned int start = color == RED ? 0 : 1;
@@ -345,19 +386,34 @@ void lin_solve(unsigned int n, boundary b,
     float * red = x;
     float * blk = x + color_size;
 
-    unsigned int blocksPerRow = (((n / 2) + 1023) / 1024);
-    dim3 grid(blocksPerRow, n);
-    dim3 block(1024, 1);
+    unsigned int threadsPerRow = n/2 < TPB ? n/2 : TPB;
+    unsigned int blocksPerRow = (((n / 2) + (threadsPerRow-1)) / threadsPerRow);
+    unsigned int height = 1024/threadsPerRow;
+    int rows = (n/height);
+    //dim3 grid(1, rows);
+    dim3 block(TPB, height);
+    dim3 grid(blocksPerRow, rows);
     for (unsigned int k = 0; k < 20; ++k) {
-        // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
-        lin_solve_rb_step<<<grid, block>>>(RED, n, a, c, red0, blk, red);
-        // cudaMemcpyToSymbol(ro_mem, blk0, threadsPerBlock * sizeof(float));
-        lin_solve_rb_step<<<grid, block>>>(BLACK, n, a, c, blk0, red, blk);
-        set_bnd(n, b, x);
+      // cudaMemcpyToSymbol(ro_mem, red0, threadsPerBlock * sizeof(float));
+      lin_solve_rb_step<<<grid, block>>>(RED, n, a, c, red0, blk, red);
+      cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("lin_solve_rb_step_kernel 1 launch failed: %s\n", cudaGetErrorString(err));
+       }
+
+      // cudaMemcpyToSymbol(ro_mem, blk0, threadsPerBlock * sizeof(float));
+      lin_solve_rb_step<<<grid, block>>>(BLACK, n, a, c, blk0, red, blk);
+      err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("lin_solve_rb_step_kernel 2 launch failed: %s\n", cudaGetErrorString(err));
+       }
+
+//       cudaDeviceSynchronize();
+      set_bnd(n, b, x);
     }
   }
 
-void diffuse(unsigned int n, boundary b, float * x, const float * x0, float diff, float dt)
+void diffuse(unsigned int n, boundary b, float * x, float * x0, float diff, float dt)
 {
     float a = dt * diff * n * n;
     lin_solve(n, b, x, x0, a, 1 + 4 * a);
@@ -399,14 +455,24 @@ __global__ void advect_kernel(unsigned int n, boundary b, float*  d, float* d0, 
 
 void advect(unsigned int n, boundary b, float*  d, float* d0, const float* u, const float* v, float dt)
 {
-  unsigned int numBlocks = (n + 31) / 32;
-  dim3 block(32, 32);
+  unsigned int numBlocks = (n + (SIDE-1)) / SIDE;
+  dim3 block(SIDE,SIDE);
   dim3 grid(numBlocks,numBlocks);
   advect_kernel<<<grid, block>>>(n, b, d, d0, u, v, dt);
+  cudaError_t err = cudaGetLastError();
+     if (err != cudaSuccess) {
+     printf("react_kernel launch failed: %s\n", cudaGetErrorString(err));
+  }
+ // cudaDeviceSynchronize();
   set_bnd(n, b, d);
 }
 
-__global__ void project_density_kernel(unsigned int n, float *u, float *v, float *p, float *div) {
+__global__ void project_density_kernel(
+  unsigned int n,
+  float *u,
+  float *v,
+  float *p,
+  float *div) {
   unsigned int i = blockDim.y * blockIdx.y + threadIdx.y + 1;
   unsigned int j = blockDim.x * blockIdx.x + threadIdx.x + 1;
   if (i < n+1 && j < n+1) {
@@ -428,10 +494,14 @@ __global__ void project_vel_kernel(unsigned int n, float *u, float *v, float *p)
 static void project(unsigned int n, float * u, float *  v, float * p, float * div)
 {
         // printf("Thread %d in range [%d,%d), total: %d\n", omp_get_thread_num(), start+1, end+1, n);
-    unsigned int numBlocks = (n + 31) / 32;
-    dim3 block(32, 32);
+    unsigned int numBlocks = (n + (SIDE-1)) / SIDE;
+    dim3 block(SIDE, SIDE);
     dim3 grid(numBlocks,numBlocks);
     project_density_kernel<<<grid,block>>>(n, u, v, p, div);
+    cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("project_density_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
 
     set_bnd(n, NONE, div);
     set_bnd(n, NONE, p);
@@ -439,6 +509,12 @@ static void project(unsigned int n, float * u, float *  v, float * p, float * di
     lin_solve(n, NONE, p, div, 1, 4);
 
     project_vel_kernel<<<grid, block>>>(n, u, v, p);
+    err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        printf("project_vel_kernel launch failed: %s\n", cudaGetErrorString(err));
+    }
+
+//     cudaDeviceSynchronize();
     set_bnd(n, VERTICAL, u);
     set_bnd(n, HORIZONTAL, v);
 }
@@ -454,16 +530,80 @@ __host__ void dens_step(unsigned int n, float *x, float *x0, float *u, float *v,
 
 __host__ void vel_step(unsigned int n, float *u, float *v, float *u0, float *v0, float visc, float dt)
 {
-    add_source(n, u, u0, dt);
-    add_source(n, v, v0, dt);
-    SWAP(u0, u);
-    diffuse(n, VERTICAL, u, u0, visc, dt);
-    SWAP(v0, v);
-    diffuse(n, HORIZONTAL, v, v0, visc, dt);
-    project(n, u, v, u0, v0);
-    SWAP(u0, u);
-    SWAP(v0, v);
-    advect(n, VERTICAL, u, u0, u0, v0, dt);
-    advect(n, HORIZONTAL, v, v0, u0, v0, dt);
-    project(n, u, v, u0, v0);
+  add_source(n, u, u0, dt);
+  add_source(n, v, v0, dt);
+  SWAP(u0, u);
+  diffuse(n, VERTICAL, u, u0, visc, dt);
+  SWAP(v0, v);
+  diffuse(n, HORIZONTAL, v, v0, visc, dt);
+  project(n, u, v, u0, v0);
+  SWAP(u0, u);
+  SWAP(v0, v);
+  advect(n, VERTICAL, u, u0, u0, v0, dt);
+  advect(n, HORIZONTAL, v, v0, u0, v0, dt);
+  project(n, u, v, u0, v0);
+}
+
+__global__ void react_kernel(float * d, float * h_u, float * v, int n,
+    float *d_force, float *d_source)
+{
+
+
+    if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
+        float max_velocity2 = 0.0f;
+        float max_density = 0.0f;
+        int size = (n+2)*(n+2);
+
+        // Busca máximos (puedes hacer esto en host si quieres)
+        for (int idx = 0; idx < size; ++idx) {
+            if (max_velocity2 < h_u[idx]*h_u[idx] + v[idx]*v[idx]) {
+                max_velocity2 = h_u[idx]*h_u[idx] + v[idx]*v[idx];
+            }
+            if (max_density < d[idx]) {
+                max_density = d[idx];
+            }
+        }
+
+        if (max_velocity2<0.0000005f) {
+            h_u[IX(n/2,n/2)] = *d_force * 10.0f;
+            v[IX(n/2,n/2)] = *d_force * 10.0f;
+        }
+        if (max_density<1.0f) {
+            d[IX(n/2,n/2)] = *d_source * 10.0f;
+        }
+
+        // if ( !d_mouse_down[0] && !d_mouse_down[2] ) return;
+
+        // int i = (int)(( *d_mx /(float)*d_win_x)*n+1);
+        // int j = (int)(((*d_win_y-*d_my)/(float)*d_win_y)*n+1);
+
+        // if ( i<1 || i>n || j<1 || j>n ) return;
+
+        // if ( d_mouse_down[0] ) {
+        //     h_u[IX(i,j)] = *d_force * (*d_mx-*d_omx);
+        //     v[IX(i,j)] = *d_force * (*d_omy-*d_my);
+        // }
+
+        // if ( d_mouse_down[2] ) {
+        //     d[IX(i,j)] = *d_source;
+        // }
+
+        // *d_omx = *d_mx;
+        // *d_omy = *d_my;
+    }
+}
+
+
+void react(float * d, float * u, float * v, int n,
+        float *d_force, float *d_source){
+        unsigned int numBlocks = (N + (SIDE-1)) / (SIDE);
+        dim3 block(SIDE,SIDE);
+        dim3 grid(numBlocks,numBlocks);
+        react_kernel<<<grid, block>>>(d, u, v, n, d_force, d_source);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+         printf("react_kernel launch failed: %s\n", cudaGetErrorString(err));
+        }
+//      cudaDeviceSynchronize();
+
 }

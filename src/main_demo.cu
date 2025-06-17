@@ -700,7 +700,12 @@ void advect(unsigned int n, boundary b, float*  d, float* d0, const float* u, co
   set_bnd(n, b, d);
 }
 
-__global__ void project_density_kernel(unsigned int n, float *u, float *v, float *p, float *div) {
+__global__ void project_density_kernel(
+  unsigned int n,
+  float *u,
+  float *v,
+  float *p,
+  float *div) {
   unsigned int i = blockDim.y * blockIdx.y + threadIdx.y + 1;
   unsigned int j = blockDim.x * blockIdx.x + threadIdx.x + 1;
   if (i < n+1 && j < n+1) {
